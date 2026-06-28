@@ -54,8 +54,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(success 
-            ? 'Erfolgreich in Google Sheets gespeichert!' 
+          content: Text(success
+            ? 'Erfolgreich in Google Sheets gespeichert!'
             : 'Fehler beim Speichern. Prüfe die URL!'),
           backgroundColor: success ? Colors.green : Colors.red,
         ),
@@ -84,10 +84,10 @@ class _MyHomePageState extends State<MyHomePage> {
             const SizedBox(height: 30),
             ElevatedButton.icon(
               onPressed: _isLoading ? null : _saveToSheets,
-              icon: _isLoading 
+              icon: _isLoading
                 ? const SizedBox(
-                    width: 20, 
-                    height: 20, 
+                    width: 20,
+                    height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2)
                   )
                 : const Icon(Icons.cloud_upload),
