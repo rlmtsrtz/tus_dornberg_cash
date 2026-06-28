@@ -180,6 +180,7 @@ class _KassePageState extends State<KassePage> {
     Person? selectedPerson;
     Penalty? selectedPenalty;
     String? selectedTag;
+    DateTime selectedDate = DateTime.now();
 
     final allTags = _penalties.expand((p) => p.tags).toSet().toList()..sort();
 
@@ -197,12 +198,34 @@ class _KassePageState extends State<KassePage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  DropdownButton<Person>(
-                    value: selectedPerson,
-                    hint: const Text('Person wählen'),
-                    isExpanded: true,
-                    onChanged: (val) => setDialogState(() => selectedPerson = val),
-                    items: _people.map((p) => DropdownMenuItem(value: p, child: Text(p.name))).toList(),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButton<Person>(
+                          value: selectedPerson,
+                          hint: const Text('Person wählen'),
+                          isExpanded: true,
+                          onChanged: (val) => setDialogState(() => selectedPerson = val),
+                          items: _people.map((p) => DropdownMenuItem(value: p, child: Text(p.name))).toList(),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton.icon(
+                        icon: const Icon(Icons.calendar_today, size: 18),
+                        label: Text(DateFormat('dd.MM.').format(selectedDate)),
+                        onPressed: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: selectedDate,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2030),
+                          );
+                          if (picked != null) {
+                            setDialogState(() => selectedDate = picked);
+                          }
+                        },
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 16),
                   if (allTags.isNotEmpty) ...[
@@ -259,7 +282,7 @@ class _KassePageState extends State<KassePage> {
                             );
                             return;
                           }
-                          _showTilgungDialog(selectedPerson!);
+                          _showTilgungDialog(selectedPerson!, initialDate: selectedDate);
                         },
                       ),
                     ],
@@ -276,7 +299,7 @@ class _KassePageState extends State<KassePage> {
                     personId: selectedPerson!.id,
                     description: selectedPenalty!.name,
                     amount: -selectedPenalty!.amount, 
-                    date: DateTime.now(),
+                    date: selectedDate, // Use the selected date
                   );
                   Navigator.pop(context);
                   setState(() => _isLoading = true);
@@ -292,43 +315,74 @@ class _KassePageState extends State<KassePage> {
     );
   }
 
-  void _showTilgungDialog(Person person) {
+  void _showTilgungDialog(Person person, {DateTime? initialDate}) {
     final amountController = TextEditingController();
+    DateTime selectedDate = initialDate ?? DateTime.now();
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Tilgung für ${person.name}'),
-        content: TextField(
-          controller: amountController,
-          decoration: const InputDecoration(labelText: 'Betrag (€)', hintText: 'z.B. 10.00'),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Abbrechen')),
-          ElevatedButton(
-            onPressed: () async {
-              final amountStr = amountController.text.replaceAll(',', '.');
-              final amount = double.tryParse(amountStr) ?? 0.0;
-              if (amount > 0) {
-                final trans = AppTransaction(
-                  id: DateTime.now().millisecondsSinceEpoch.toString(),
-                  personId: person.id,
-                  description: 'Tilgung',
-                  amount: amount, 
-                  date: DateTime.now(),
-                  isTilgung: true,
-                );
-                Navigator.pop(context); // Close Tilgung dialog
-                Navigator.pop(context); // Close Add dialog
-                setState(() => _isLoading = true);
-                await GoogleSheetsService.addTransaction(trans);
-                _loadAllData();
-              }
-            },
-            child: const Text('Speichern'),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Tilgung für ${person.name}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  const Text('Datum:'),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    icon: const Icon(Icons.calendar_today, size: 18),
+                    label: Text(DateFormat('dd.MM.yyyy').format(selectedDate)),
+                    onPressed: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: selectedDate,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2030),
+                      );
+                      if (picked != null) {
+                        setDialogState(() => selectedDate = picked);
+                      }
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: amountController,
+                decoration: const InputDecoration(labelText: 'Betrag (€)', hintText: 'z.B. 10.00'),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                autofocus: true,
+              ),
+            ],
           ),
-        ],
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Abbrechen')),
+            ElevatedButton(
+              onPressed: () async {
+                final amountStr = amountController.text.replaceAll(',', '.');
+                final amount = double.tryParse(amountStr) ?? 0.0;
+                if (amount > 0) {
+                  final trans = AppTransaction(
+                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                    personId: person.id,
+                    description: 'Tilgung',
+                    amount: amount, 
+                    date: selectedDate, // Use the selected date
+                    isTilgung: true,
+                  );
+                  Navigator.pop(context); // Close Tilgung dialog
+                  Navigator.pop(context); // Close Add dialog
+                  setState(() => _isLoading = true);
+                  await GoogleSheetsService.addTransaction(trans);
+                  _loadAllData();
+                }
+              },
+              child: const Text('Speichern'),
+            ),
+          ],
+        ),
       ),
     );
   }
