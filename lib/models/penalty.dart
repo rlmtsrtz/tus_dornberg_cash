@@ -3,19 +3,22 @@ class Penalty {
   final String name;
   final double amount;
   final List<String> tags;
+  final String description; // Kurze Erklärungsbox
 
   Penalty({
     required this.id,
     required this.name,
     required this.amount,
     this.tags = const [],
+    this.description = '',
   });
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
     'amount': amount,
-    'tags': tags.join(','), // Store as comma-separated string for Google Sheets
+    'tags': tags.join(','),
+    'description': description,
   };
 
   factory Penalty.fromJson(Map<String, dynamic> json) {
@@ -25,6 +28,7 @@ class Penalty {
       name: json['name']?.toString() ?? '',
       amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
       tags: tagsRaw.isEmpty ? [] : tagsRaw.split(',').map((e) => e.trim()).toList(),
+      description: json['description']?.toString() ?? '',
     );
   }
 }

@@ -447,14 +447,21 @@ class _KassePageState extends State<KassePage> {
     int multiplier = 1;
     bool isGroupMode = false;
 
-    final allTags = penalties.expand((p) => p.tags).toSet().toList()..sort();
-
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
-          final filtered = selectedTag == null ? penalties : penalties.where((p) => p.tags.contains(selectedTag)).toList();
+          // Filter penalties by mode and selected tag
+          final modeTag = isGroupMode ? 'Gruppe' : 'Einzeln';
+          final modeFiltered = penalties.where((p) => p.tags.contains(modeTag)).toList();
+          final filtered = selectedTag == null ? modeFiltered : modeFiltered.where((p) => p.tags.contains(selectedTag)).toList();
           
+          // Get unique tags for the current mode, excluding "Gruppe" and "Einzeln"
+          final allTags = modeFiltered.expand((p) => p.tags)
+              .toSet()
+              .where((t) => t != 'Gruppe' && t != 'Einzeln')
+              .toList()..sort();
+
           List<Person> targetPeople = [];
           if (isGroupMode && selectedGroup != null) {
             targetPeople = people.where((p) => p.group == selectedGroup).toList();
@@ -474,13 +481,21 @@ class _KassePageState extends State<KassePage> {
                       ChoiceChip(
                         label: const Text('Einzeln'),
                         selected: !isGroupMode,
-                        onSelected: (val) => setDialogState(() => isGroupMode = !val),
+                        onSelected: (val) => setDialogState(() {
+                          isGroupMode = !val;
+                          selectedPenalty = null;
+                          selectedTag = null;
+                        }),
                       ),
                       const SizedBox(width: 8),
                       ChoiceChip(
                         label: const Text('Gruppe'),
                         selected: isGroupMode,
-                        onSelected: (val) => setDialogState(() => isGroupMode = val),
+                        onSelected: (val) => setDialogState(() {
+                          isGroupMode = val;
+                          selectedPenalty = null;
+                          selectedTag = null;
+                        }),
                       ),
                     ],
                   ),
@@ -825,16 +840,45 @@ class StrafenListPage extends StatelessWidget {
             itemCount: penalties.length,
             itemBuilder: (context, index) {
               final p = penalties[index];
-              return ListTile(
-                title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text('${p.amount.toStringAsFixed(2)} €'),
-                trailing: isAdmin ? IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => FirebaseService.deletePenalty(p.id)) : null,
+              return InkWell(
+                onTap: isAdmin ? () => _showPenaltyDialog(context, penalty: p) : null,
+                child: ListTile(
+                  title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('${p.amount.toStringAsFixed(2).replaceAll('.', ',')} €'),
+                      if (p.description.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4.0),
+                          child: Text(
+                            p.description,
+                            style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey),
+                          ),
+                        ),
+                      if (p.tags.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4.0),
+                          child: Wrap(
+                            spacing: 4,
+                            children: p.tags.map((tag) => Chip(
+                              label: Text(tag, style: const TextStyle(fontSize: 10)),
+                              padding: EdgeInsets.zero,
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              visualDensity: VisualDensity.compact,
+                            )).toList(),
+                          ),
+                        ),
+                    ],
+                  ),
+                  trailing: isAdmin ? IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => FirebaseService.deletePenalty(p.id)) : null,
+                ),
               );
             },
           ),
           floatingActionButton: isAdmin
               ? FloatingActionButton(
-                  onPressed: () => _addPenalty(context),
+                  onPressed: () => _showPenaltyDialog(context),
                   backgroundColor: const Color(0xFF4CAF50),
                   child: const Icon(Icons.add, color: Colors.white),
                 )
@@ -844,21 +888,30 @@ class StrafenListPage extends StatelessWidget {
     );
   }
 
-  void _addPenalty(BuildContext context) {
-    final nameC = TextEditingController();
-    final amountC = TextEditingController();
-    final tagsC = TextEditingController();
+  void _showPenaltyDialog(BuildContext context, {Penalty? penalty}) {
+    final nameC = TextEditingController(text: penalty?.name);
+    final amountC = TextEditingController(text: penalty?.amount.toString());
+    final tagsC = TextEditingController(text: penalty?.tags.join(', '));
+    final descC = TextEditingController(text: penalty?.description);
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Strafe hinzufügen'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Name')),
-            TextField(controller: amountC, decoration: const InputDecoration(labelText: 'Betrag (€)'), keyboardType: TextInputType.number),
-            TextField(controller: tagsC, decoration: const InputDecoration(labelText: 'Tags (komma-getrennt)')),
-          ],
+        title: Text(penalty == null ? 'Strafe hinzufügen' : 'Strafe bearbeiten'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Name')),
+              TextField(controller: amountC, decoration: const InputDecoration(labelText: 'Betrag (€)'), keyboardType: TextInputType.number),
+              TextField(controller: tagsC, decoration: const InputDecoration(labelText: 'Tags (komma-getrennt)')),
+              TextField(
+                controller: descC, 
+                decoration: const InputDecoration(labelText: 'Erklärung (Box)', hintText: 'Kurze Beschreibung...'),
+                maxLines: 2,
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Abbrechen')),
@@ -866,16 +919,17 @@ class StrafenListPage extends StatelessWidget {
             onPressed: () async {
               if (nameC.text.isNotEmpty) {
                 final p = Penalty(
-                  id: DateTime.now().millisecondsSinceEpoch.toString(),
+                  id: penalty?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
                   name: nameC.text,
-                  amount: double.tryParse(amountC.text) ?? 0.0,
-                  tags: tagsC.text.split(',').map((e) => e.trim()).toList(),
+                  amount: double.tryParse(amountC.text.replaceAll(',', '.')) ?? 0.0,
+                  tags: tagsC.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
+                  description: descC.text,
                 );
                 Navigator.pop(context);
                 await FirebaseService.addPenalty(p);
               }
             },
-            child: const Text('Hinzufügen'),
+            child: Text(penalty == null ? 'Hinzufügen' : 'Speichern'),
           ),
         ],
       ),
