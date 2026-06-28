@@ -47,6 +47,44 @@ class FirebaseService {
       snap.docs.map((doc) => doc.id).toList());
   }
 
+  // --- GROUPS ---
+
+  static Stream<List<String>> getGroups() {
+    return _db.collection('groups').snapshots().map((snapshot) =>
+        snapshot.docs.map((doc) => doc.id).toList()..sort());
+  }
+
+  static Future<void> addGroup(String name) {
+    return _db.collection('groups').doc(name).set({'createdAt': FieldValue.serverTimestamp()});
+  }
+
+  static Future<void> deleteGroup(String name) {
+    return _db.collection('groups').doc(name).delete();
+  }
+
+  // Rename group is tricky because we need to update all persons. 
+  // For simplicity, we can delete and add, and the user handles updating persons.
+  // Or we implement a proper rename.
+  static Future<void> renameGroup(String oldName, String newName) async {
+    final batch = _db.batch();
+    
+    // Add new group
+    batch.set(_db.collection('groups').doc(newName), {'createdAt': FieldValue.serverTimestamp()});
+    // Delete old group
+    batch.delete(_db.collection('groups').doc(oldName));
+    
+    // Update all persons who have this group
+    final persons = await _db.collection('people').where('groups', arrayContains: oldName).get();
+    for (var doc in persons.docs) {
+      List<String> groups = List<String>.from(doc.data()['groups']);
+      groups.remove(oldName);
+      groups.add(newName);
+      batch.update(doc.reference, {'groups': groups});
+    }
+    
+    await batch.commit();
+  }
+
   // --- PEOPLE ---
 
   static Stream<List<Person>> getPeople() {
@@ -60,10 +98,6 @@ class FirebaseService {
 
   static Future<void> deletePerson(String id) {
     return _db.collection('people').doc(id).delete();
-  }
-
-  static Future<void> updatePersonGroup(String id, PersonGroup newGroup) {
-    return _db.collection('people').doc(id).update({'group': newGroup.name});
   }
 
   // --- PENALTIES ---

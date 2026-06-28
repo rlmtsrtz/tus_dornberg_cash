@@ -339,96 +339,102 @@ class _KassePageState extends State<KassePage> {
             return StreamBuilder<List<Penalty>>(
               stream: FirebaseService.getPenalties(),
               builder: (context, penaltySnap) {
-                if (!peopleSnap.hasData || !transSnap.hasData || !penaltySnap.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+                return StreamBuilder<List<String>>(
+                  stream: FirebaseService.getGroups(),
+                  builder: (context, groupsSnap) {
+                    if (!peopleSnap.hasData || !transSnap.hasData || !penaltySnap.hasData || !groupsSnap.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
 
-                final people = peopleSnap.data!..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-                final seasonMonths = _getSeasonMonths();
+                    final people = peopleSnap.data!..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+                    final seasonMonths = _getSeasonMonths();
 
-                return Scaffold(
-                  body: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        color: const Color(0xFFF1F8E9),
-                        child: Column(
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    return Scaffold(
+                      body: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            color: const Color(0xFFF1F8E9),
+                            child: Column(
                               children: [
-                                Text(
-                                  'Saison: ${DateFormat('dd.MM.yy').format(_startDate)} - ${DateFormat('dd.MM.yy').format(_endDate)}',
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'Saison: ${DateFormat('dd.MM.yy').format(_startDate)} - ${DateFormat('dd.MM.yy').format(_endDate)}',
+                                      style: const TextStyle(fontWeight: FontWeight.bold),
+                                    ),
+                                    if (widget.isAdmin)
+                                      IconButton(
+                                        icon: const Icon(Icons.calendar_month),
+                                        onPressed: _showSeasonSettings,
+                                      ),
+                                  ],
                                 ),
-                                if (widget.isAdmin)
-                                  IconButton(
-                                    icon: const Icon(Icons.calendar_month),
-                                    onPressed: _showSeasonSettings,
+                                SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    children: [
+                                      FilterChip(
+                                        label: const Text('Gesamt'),
+                                        selected: _selectedMonthStart == null,
+                                        onSelected: (val) => setState(() => _selectedMonthStart = null),
+                                        selectedColor: const Color(0xFFA5D6A7),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      ...seasonMonths.map((m) => Padding(
+                                        padding: const EdgeInsets.only(right: 8),
+                                        child: FilterChip(
+                                          label: Text(DateFormat('MMM yy').format(m)),
+                                          selected: _selectedMonthStart?.year == m.year && _selectedMonthStart?.month == m.month,
+                                          onSelected: (val) => setState(() => _selectedMonthStart = val ? m : null),
+                                          selectedColor: const Color(0xFFA5D6A7),
+                                        ),
+                                      )),
+                                    ],
                                   ),
+                                ),
                               ],
                             ),
-                            SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Row(
-                                children: [
-                                  FilterChip(
-                                    label: const Text('Gesamt'),
-                                    selected: _selectedMonthStart == null,
-                                    onSelected: (val) => setState(() => _selectedMonthStart = null),
-                                    selectedColor: const Color(0xFFA5D6A7),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  ...seasonMonths.map((m) => Padding(
-                                    padding: const EdgeInsets.only(right: 8),
-                                    child: FilterChip(
-                                      label: Text(DateFormat('MMM yy').format(m)),
-                                      selected: _selectedMonthStart?.year == m.year && _selectedMonthStart?.month == m.month,
-                                      onSelected: (val) => setState(() => _selectedMonthStart = val ? m : null),
-                                      selectedColor: const Color(0xFFA5D6A7),
+                          ),
+                          Expanded(
+                            child: ListView.builder(
+                              itemCount: people.length,
+                              itemBuilder: (context, index) {
+                                final p = people[index];
+                                final balance = _calculateBalance(p.id, transSnap.data!);
+                                return InkWell(
+                                  onTap: () => _showHistory(context, p, transSnap.data!),
+                                  child: ListTile(
+                                    leading: CircleAvatar(
+                                      backgroundColor: const Color(0xFFA5D6A7),
+                                      child: Text(p.name[0], style: const TextStyle(color: Colors.white)),
                                     ),
-                                  )),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Expanded(
-                        child: ListView.builder(
-                          itemCount: people.length,
-                          itemBuilder: (context, index) {
-                            final p = people[index];
-                            final balance = _calculateBalance(p.id, transSnap.data!);
-                            return InkWell(
-                              onTap: () => _showHistory(context, p, transSnap.data!),
-                              child: ListTile(
-                                leading: CircleAvatar(
-                                  backgroundColor: const Color(0xFFA5D6A7),
-                                  child: Text(p.name[0], style: const TextStyle(color: Colors.white)),
-                                ),
-                                title: Text(p.name),
-                                trailing: Text(
-                                  '${balance.toStringAsFixed(2).replaceAll('.', ',')} €',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: balance < 0 ? Colors.red : (balance > 0 ? Colors.green : Colors.black),
+                                    title: Text(p.name),
+                                    subtitle: Text(p.groups.join(', ')),
+                                    trailing: Text(
+                                      '${balance.toStringAsFixed(2).replaceAll('.', ',')} €',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: balance < 0 ? Colors.red : (balance > 0 ? Colors.green : Colors.black),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  floatingActionButton: widget.isAdmin
-                      ? FloatingActionButton(
-                          onPressed: () => _addTransaction(context, people, penaltySnap.data!, transSnap.data!),
-                          backgroundColor: const Color(0xFF4CAF50),
-                          child: const Icon(Icons.add, color: Colors.white),
-                        )
-                      : null,
+                      floatingActionButton: widget.isAdmin
+                          ? FloatingActionButton(
+                              onPressed: () => _addTransaction(context, people, penaltySnap.data!, transSnap.data!, groupsSnap.data!),
+                              backgroundColor: const Color(0xFF4CAF50),
+                              child: const Icon(Icons.add, color: Colors.white),
+                            )
+                          : null,
+                    );
+                  }
                 );
               },
             );
@@ -438,9 +444,9 @@ class _KassePageState extends State<KassePage> {
     );
   }
 
-  void _addTransaction(BuildContext context, List<Person> people, List<Penalty> penalties, List<AppTransaction> existingTransactions) {
+  void _addTransaction(BuildContext context, List<Person> people, List<Penalty> penalties, List<AppTransaction> existingTransactions, List<String> groups) {
     Person? selectedPerson;
-    PersonGroup? selectedGroup;
+    String? selectedGroup;
     Penalty? selectedPenalty;
     String? selectedTag;
     DateTime selectedDate = DateTime.now();
@@ -464,7 +470,7 @@ class _KassePageState extends State<KassePage> {
 
           List<Person> targetPeople = [];
           if (isGroupMode && selectedGroup != null) {
-            targetPeople = people.where((p) => p.group == selectedGroup).toList();
+            targetPeople = people.where((p) => p.groups.contains(selectedGroup)).toList();
           } else if (!isGroupMode && selectedPerson != null) {
             targetPeople = [selectedPerson!];
           }
@@ -504,12 +510,12 @@ class _KassePageState extends State<KassePage> {
                     children: [
                       Expanded(
                         child: isGroupMode
-                            ? DropdownButton<PersonGroup>(
+                            ? DropdownButton<String>(
                                 value: selectedGroup,
                                 hint: const Text('Gruppe'),
                                 isExpanded: true,
                                 onChanged: (val) => setDialogState(() => selectedGroup = val),
-                                items: PersonGroup.values.map((g) => DropdownMenuItem(value: g, child: Text(g.displayName))).toList(),
+                                items: groups.map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
                               )
                             : DropdownButton<Person>(
                                 value: selectedPerson,
@@ -721,101 +727,188 @@ class PersonenListPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return StreamBuilder<List<Person>>(
       stream: FirebaseService.getPeople(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        final people = snapshot.data!;
+      builder: (context, peopleSnap) {
+        return StreamBuilder<List<String>>(
+          stream: FirebaseService.getGroups(),
+          builder: (context, groupsSnap) {
+            if (!peopleSnap.hasData || !groupsSnap.hasData) return const Center(child: CircularProgressIndicator());
+            final people = peopleSnap.data!..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+            final groups = groupsSnap.data!;
 
-        return Scaffold(
-          body: Row(
-            children: [
-              Expanded(
-                child: ListView.builder(
-                  itemCount: people.length,
-                  itemBuilder: (context, index) {
-                    final p = people[index];
-                    return isAdmin
-                        ? Draggable<Person>(
-                            data: p,
-                            feedback: Material(elevation: 4, child: Container(padding: const EdgeInsets.all(16), color: Colors.green[100], child: Text(p.name))),
-                            child: ListTile(
-                              title: Text(p.name),
-                              subtitle: Text(p.group.displayName),
-                              trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => FirebaseService.deletePerson(p.id)),
-                            ),
-                          )
-                        : ListTile(title: Text(p.name), subtitle: Text(p.group.displayName));
-                  },
+            return Scaffold(
+              appBar: isAdmin ? AppBar(
+                toolbarHeight: 40,
+                backgroundColor: Colors.white,
+                title: TextButton.icon(
+                  onPressed: () => _manageGroups(context, groups),
+                  icon: const Icon(Icons.edit_note, size: 18),
+                  label: const Text('Gruppen verwalten', style: TextStyle(fontSize: 12)),
                 ),
+              ) : null,
+              body: ListView.builder(
+                itemCount: people.length,
+                itemBuilder: (context, index) {
+                  final p = people[index];
+                  return ListTile(
+                    title: Text(p.name),
+                    subtitle: Text(p.groups.isEmpty ? 'Keine Gruppe' : p.groups.join(', ')),
+                    onTap: isAdmin ? () => _showPersonDialog(context, groups, person: p) : null,
+                    trailing: isAdmin 
+                        ? IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red), 
+                            onPressed: () => FirebaseService.deletePerson(p.id)
+                          ) 
+                        : null,
+                  );
+                },
               ),
-              const VerticalDivider(width: 1),
-              Expanded(
-                child: ListView(
-                  children: PersonGroup.values.map((group) {
-                    final groupPeople = people.where((p) => p.group == group).toList();
-                    return isAdmin
-                        ? DragTarget<Person>(
-                            onAcceptWithDetails: (details) => FirebaseService.updatePersonGroup(details.data.id, group),
-                            builder: (context, candidate, _) => Container(
-                              margin: const EdgeInsets.all(8),
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(border: Border.all(color: Colors.grey[300]!), borderRadius: BorderRadius.circular(8)),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(group.displayName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                  Wrap(spacing: 4, children: groupPeople.map((p) => Chip(label: Text(p.name))).toList()),
-                                ],
-                              ),
-                            ),
-                          )
-                        : Container(
-                            margin: const EdgeInsets.all(8),
-                            padding: const EdgeInsets.all(8),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(group.displayName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                Wrap(spacing: 4, children: groupPeople.map((p) => Chip(label: Text(p.name))).toList()),
-                              ],
-                            ),
-                          );
-                  }).toList(),
-                ),
-              ),
-            ],
-          ),
-          floatingActionButton: isAdmin
-              ? FloatingActionButton(
-                  onPressed: () => _addPerson(context),
-                  backgroundColor: const Color(0xFF4CAF50),
-                  child: const Icon(Icons.add, color: Colors.white),
-                )
-              : null,
+              floatingActionButton: isAdmin
+                  ? FloatingActionButton(
+                      onPressed: () => _showPersonDialog(context, groups),
+                      backgroundColor: const Color(0xFF4CAF50),
+                      child: const Icon(Icons.add, color: Colors.white),
+                    )
+                  : null,
+            );
+          }
         );
       },
     );
   }
 
-  void _addPerson(BuildContext context) {
+  void _manageGroups(BuildContext context, List<String> groups) {
     final controller = TextEditingController();
     showDialog(
       context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Gruppen verwalten'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: controller,
+                  decoration: const InputDecoration(labelText: 'Neue Gruppe hinzufügen'),
+                  onSubmitted: (val) async {
+                    if (val.isNotEmpty) {
+                      await FirebaseService.addGroup(val.trim());
+                      controller.clear();
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+                const Text('Vorhandene Gruppen:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const Divider(),
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: groups.length,
+                    itemBuilder: (context, index) {
+                      final group = groups[index];
+                      return ListTile(
+                        title: Text(group),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit, size: 20),
+                              onPressed: () => _renameGroupDialog(context, group),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                              onPressed: () => FirebaseService.deleteGroup(group),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Schließen'))],
+        ),
+      ),
+    );
+  }
+
+  void _renameGroupDialog(BuildContext context, String oldName) {
+    final controller = TextEditingController(text: oldName);
+    showDialog(
+      context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Person hinzufügen'),
-        content: TextField(controller: controller, decoration: const InputDecoration(labelText: 'Name')),
+        title: Text('"$oldName" umbenennen'),
+        content: TextField(controller: controller, decoration: const InputDecoration(labelText: 'Neuer Name')),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Abbrechen')),
           ElevatedButton(
             onPressed: () async {
-              if (controller.text.isNotEmpty) {
-                final p = Person(id: DateTime.now().millisecondsSinceEpoch.toString(), name: controller.text, group: PersonGroup.ersatzbank);
+              if (controller.text.isNotEmpty && controller.text != oldName) {
+                await FirebaseService.renameGroup(oldName, controller.text.trim());
                 Navigator.pop(context);
-                await FirebaseService.addPerson(p);
               }
             },
-            child: const Text('Hinzufügen'),
+            child: const Text('Speichern'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showPersonDialog(BuildContext context, List<String> availableGroups, {Person? person}) {
+    final nameController = TextEditingController(text: person?.name);
+    List<String> selectedGroups = person?.groups ?? [];
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(person == null ? 'Person hinzufügen' : 'Person bearbeiten'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Name')),
+                const SizedBox(height: 16),
+                const Align(alignment: Alignment.centerLeft, child: Text('Gruppen:', style: TextStyle(fontWeight: FontWeight.bold))),
+                const Divider(),
+                ...availableGroups.map((g) => CheckboxListTile(
+                  title: Text(g),
+                  value: selectedGroups.contains(g),
+                  onChanged: (val) {
+                    setDialogState(() {
+                      if (val == true) {
+                        selectedGroups.add(g);
+                      } else {
+                        selectedGroups.remove(g);
+                      }
+                    });
+                  },
+                )),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Abbrechen')),
+            ElevatedButton(
+              onPressed: () async {
+                if (nameController.text.isNotEmpty) {
+                  final p = Person(
+                    id: person?.id ?? DateTime.now().millisecondsSinceEpoch.toString(), 
+                    name: nameController.text.trim(), 
+                    groups: selectedGroups
+                  );
+                  Navigator.pop(context);
+                  await FirebaseService.addPerson(p);
+                }
+              },
+              child: Text(person == null ? 'Hinzufügen' : 'Speichern'),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,40 +1,29 @@
-enum PersonGroup {
-  mg1('Materialgruppe 1'),
-  mg2('Materialgruppe 2'),
-  mg3('Materialgruppe 3'),
-  mg4('Materialgruppe 4'),
-  trainer('Trainer'),
-  ersatzbank('Ersatzbank');
-
-  final String displayName;
-  const PersonGroup(this.displayName);
-
-  static PersonGroup fromString(String value) {
-    return PersonGroup.values.firstWhere(
-      (e) => e.name == value || e.displayName == value,
-      orElse: () => PersonGroup.ersatzbank,
-    );
-  }
-}
-
 class Person {
   final String id;
   final String name;
-  final PersonGroup group;
+  final List<String> groups; // Liste von Gruppen-IDs oder Namen
 
-  Person({required this.id, required this.name, required this.group});
+  Person({required this.id, required this.name, required this.groups});
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
-    'group': group.name,
+    'groups': groups,
   };
 
   factory Person.fromJson(Map<String, dynamic> json) {
+    // Falls das Feld 'group' (alt) noch existiert, konvertieren wir es in eine Liste
+    List<String> groupsList = [];
+    if (json['groups'] != null) {
+      groupsList = List<String>.from(json['groups']);
+    } else if (json['group'] != null) {
+      groupsList = [json['group'].toString()];
+    }
+
     return Person(
       id: json['id']?.toString() ?? json['name']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
-      group: PersonGroup.fromString(json['group']?.toString() ?? ''),
+      groups: groupsList,
     );
   }
 }
