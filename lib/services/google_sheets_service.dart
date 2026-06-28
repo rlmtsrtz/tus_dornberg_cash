@@ -2,9 +2,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class GoogleSheetsService {
-  // Spreadsheet Link: https://docs.google.com/spreadsheets/d/1_MKnby7lcBM_yIuBWJJ_AA1yiP9En3JKupWyHT8BjDM/edit?usp=sharing
+  // URL https://script.google.com/macros/s/AKfycbxTPMs9d8eWOo67KqgwfvjvF--ECLc4FFd-FOwa_OvjlZcG9vrTN-On6chW-0JR8fWj/exec
+  // ID AKfycbxTPMs9d8eWOo67KqgwfvjvF--ECLc4FFd-FOwa_OvjlZcG9vrTN-On6chW-0JR8fWj
   // TODO: Replace this with your actual Google Apps Script Web App URL after deployment
-  static const String _scriptUrl = 'https://docs.google.com/spreadsheets/d/1_MKnby7lcBM_yIuBWJJ_AA1yiP9En3JKupWyHT8BjDM/edit?usp=sharing';
+  static const String _scriptUrl = 'https://script.google.com/macros/s/AKfycbxTPMs9d8eWOo67KqgwfvjvF--ECLc4FFd-FOwa_OvjlZcG9vrTN-On6chW-0JR8fWj/exec';
 
   static Future<bool> saveNumber(int value) async {
     if (_scriptUrl == 'YOUR_APPS_SCRIPT_URL_HERE') {
