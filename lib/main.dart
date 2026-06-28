@@ -99,16 +99,16 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
             ElevatedButton(
               onPressed: isLoading ? null : () async {
                 setDialogState(() => isLoading = true);
-                final success = await FirebaseService.signIn(
+                final errorMessage = await FirebaseService.signIn(
                   emailController.text.trim(), 
                   passwordController.text
                 );
-                if (success) {
+                if (errorMessage == null) {
                   Navigator.pop(context);
                 } else {
                   setDialogState(() => isLoading = false);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Login fehlgeschlagen. Bitte Daten prüfen.')),
+                    SnackBar(content: Text('Login fehlgeschlagen: $errorMessage')),
                   );
                 }
               },

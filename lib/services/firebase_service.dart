@@ -12,13 +12,15 @@ class FirebaseService {
 
   static Stream<User?> get authStateChanges => _auth.authStateChanges();
 
-  static Future<bool> signIn(String email, String password) async {
+  /// Returns null on success, or an error message on failure
+  static Future<String?> signIn(String email, String password) async {
     try {
       await _auth.signInWithEmailAndPassword(email: email, password: password);
-      return true;
+      return null;
+    } on FirebaseAuthException catch (e) {
+      return e.message ?? 'Unbekannter Fehler';
     } catch (e) {
-      print('Error Email Sign-In: $e');
-      return false;
+      return e.toString();
     }
   }
 
@@ -28,7 +30,7 @@ class FirebaseService {
     final user = _auth.currentUser;
     if (user == null || user.email == null) return false;
 
-    // Hardcoded Super-Admin or the shared admin email
+    // Hardcoded Super-Admin
     if (user.email == 'felske.mirco@gmail.com') return true;
 
     final doc = await _db.collection('admins').doc(user.email).get();
@@ -68,7 +70,7 @@ class FirebaseService {
     return _db.collection('people').doc(id).update({'group': newGroup.name});
   }
 
-  // --- PENALTIES ---
+  // --- PENALTY ---
 
   static Stream<List<Penalty>> getPenalties() {
     return _db.collection('penalties').snapshots().map((snapshot) =>
