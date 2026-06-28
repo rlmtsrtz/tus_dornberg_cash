@@ -38,9 +38,26 @@ class FirebaseService {
     final user = _auth.currentUser;
     if (user == null || user.email == null) return false;
 
-    // We check if the email exists in the 'admins' collection
+    // Hardcoded Super-Admin
+    if (user.email == 'felske.mirco@gmail.com') return true;
+
+    // Check others in Firestore
     final doc = await _db.collection('admins').doc(user.email).get();
     return doc.exists;
+  }
+
+  static Future<void> addAdminEmail(String email) {
+    return _db.collection('admins').doc(email).set({'addedAt': FieldValue.serverTimestamp()});
+  }
+
+  static Future<void> removeAdminEmail(String email) {
+    if (email == 'felske.mirco@gmail.com') return Future.value(); // Cannot remove super-admin
+    return _db.collection('admins').doc(email).delete();
+  }
+
+  static Stream<List<String>> getAdminEmails() {
+    return _db.collection('admins').snapshots().map((snap) => 
+      snap.docs.map((doc) => doc.id).toList());
   }
 
   // --- PEOPLE ---

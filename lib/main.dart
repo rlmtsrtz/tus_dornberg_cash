@@ -78,9 +78,75 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(context);
+              // Use signInWithPopup for Web if possible, or handle it in service
               await FirebaseService.signInWithGoogle();
             },
             child: const Text('Mit Google anmelden'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAdminManagement() {
+    final emailController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Admin-Verwaltung'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: emailController,
+                decoration: const InputDecoration(
+                  labelText: 'Neue Admin E-Mail',
+                  hintText: 'beispiel@gmail.com',
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('Aktuelle Admins:', style: TextStyle(fontWeight: FontWeight.bold)),
+              const Divider(),
+              StreamBuilder<List<String>>(
+                stream: FirebaseService.getAdminEmails(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) return const CircularProgressIndicator();
+                  final admins = snapshot.data!;
+                  return Flexible(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: admins.length,
+                      itemBuilder: (context, index) {
+                        final email = admins[index];
+                        return ListTile(
+                          title: Text(email, style: const TextStyle(fontSize: 14)),
+                          trailing: email == 'felske.mirco@gmail.com'
+                              ? null
+                              : IconButton(
+                                  icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
+                                  onPressed: () => FirebaseService.removeAdminEmail(email),
+                                ),
+                        );
+                      },
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Schließen')),
+          ElevatedButton(
+            onPressed: () async {
+              if (emailController.text.contains('@')) {
+                await FirebaseService.addAdminEmail(emailController.text.trim().toLowerCase());
+                emailController.clear();
+              }
+            },
+            child: const Text('Hinzufügen'),
           ),
         ],
       ),
@@ -119,7 +185,13 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
               onPressed: _showLoginDialog,
               tooltip: 'Admin Login',
             )
-          else
+          else ...[
+            if (_user?.email == 'felske.mirco@gmail.com')
+              IconButton(
+                icon: const Icon(Icons.settings),
+                onPressed: _showAdminManagement,
+                tooltip: 'Admin-Verwaltung',
+              ),
             PopupMenuButton(
               icon: CircleAvatar(
                 backgroundImage: _user!.photoURL != null ? NetworkImage(_user!.photoURL!) : null,
@@ -133,6 +205,7 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
                 ),
               ],
             ),
+          ],
         ],
       ),
       body: pages[_selectedIndex],
