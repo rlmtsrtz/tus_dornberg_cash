@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class GoogleSheetsService {
-  // TODO: Replace this with your actual Google Apps Script Web App URL
+  // Spreadsheet Link: https://docs.google.com/spreadsheets/d/1_MKnby7lcBM_yIuBWJJ_AA1yiP9En3JKupWyHT8BjDM/edit?usp=sharing
+  // TODO: Replace this with your actual Google Apps Script Web App URL after deployment
   static const String _scriptUrl = 'YOUR_APPS_SCRIPT_URL_HERE';
 
   static Future<bool> saveNumber(int value) async {
