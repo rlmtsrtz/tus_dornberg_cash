@@ -12,7 +12,6 @@ class FirebaseService {
 
   static Stream<User?> get authStateChanges => _auth.authStateChanges();
 
-  /// Returns null on success, or an error message on failure
   static Future<String?> signIn(String email, String password) async {
     try {
       await _auth.signInWithEmailAndPassword(email: email, password: password);
@@ -29,10 +28,7 @@ class FirebaseService {
   static Future<bool> isAdmin() async {
     final user = _auth.currentUser;
     if (user == null || user.email == null) return false;
-
-    // Hardcoded Super-Admin
     if (user.email == 'felske.mirco@gmail.com') return true;
-
     final doc = await _db.collection('admins').doc(user.email).get();
     return doc.exists;
   }
@@ -70,7 +66,7 @@ class FirebaseService {
     return _db.collection('people').doc(id).update({'group': newGroup.name});
   }
 
-  // --- PENALTY ---
+  // --- PENALTIES ---
 
   static Stream<List<Penalty>> getPenalties() {
     return _db.collection('penalties').snapshots().map((snapshot) =>
@@ -94,6 +90,10 @@ class FirebaseService {
 
   static Future<void> addTransaction(AppTransaction transaction) {
     return _db.collection('transactions').doc(transaction.id).set(transaction.toJson());
+  }
+
+  static Future<void> deleteTransaction(String id) {
+    return _db.collection('transactions').doc(id).delete();
   }
 
   // --- SETTINGS ---

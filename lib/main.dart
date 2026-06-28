@@ -424,7 +424,7 @@ class _KassePageState extends State<KassePage> {
                   ),
                   floatingActionButton: widget.isAdmin
                       ? FloatingActionButton(
-                          onPressed: () => _addTransaction(context, people, penaltySnap.data!),
+                          onPressed: () => _addTransaction(context, people, penaltySnap.data!, transSnap.data!),
                           backgroundColor: const Color(0xFF4CAF50),
                           child: const Icon(Icons.add, color: Colors.white),
                         )
@@ -438,12 +438,13 @@ class _KassePageState extends State<KassePage> {
     );
   }
 
-  void _addTransaction(BuildContext context, List<Person> people, List<Penalty> penalties) {
+  void _addTransaction(BuildContext context, List<Person> people, List<Penalty> penalties, List<AppTransaction> existingTransactions) {
     Person? selectedPerson;
     PersonGroup? selectedGroup;
     Penalty? selectedPenalty;
     String? selectedTag;
     DateTime selectedDate = DateTime.now();
+    int multiplier = 1;
     bool isGroupMode = false;
 
     final allTags = penalties.expand((p) => p.tags).toSet().toList()..sort();
@@ -512,14 +513,6 @@ class _KassePageState extends State<KassePage> {
                       ),
                     ],
                   ),
-                  if (isGroupMode && selectedGroup != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8.0),
-                      child: Text(
-                        'Empfänger: ${targetPeople.length} Personen',
-                        style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey),
-                      ),
-                    ),
                   const SizedBox(height: 16),
                   Wrap(
                     spacing: 4,
@@ -540,6 +533,12 @@ class _KassePageState extends State<KassePage> {
                           items: filtered.map((p) => DropdownMenuItem(value: p, child: Text(p.name))).toList(),
                         ),
                       ),
+                      const SizedBox(width: 8),
+                      DropdownButton<int>(
+                        value: multiplier,
+                        items: List.generate(10, (i) => i + 1).map((i) => DropdownMenuItem(value: i, child: Text('${i}x'))).toList(),
+                        onChanged: (val) => setDialogState(() => multiplier = val!),
+                      ),
                       if (!isGroupMode)
                         IconButton(
                           icon: const Icon(Icons.account_balance_wallet, color: Colors.green),
@@ -559,16 +558,45 @@ class _KassePageState extends State<KassePage> {
                 onPressed: (targetPeople.isEmpty || selectedPenalty == null)
                     ? null
                     : () async {
+                        // Duplicate Check
+                        List<Person> alreadyBooked = [];
+                        for (var p in targetPeople) {
+                          bool exists = existingTransactions.any((t) => 
+                            t.personId == p.id && 
+                            t.description == selectedPenalty!.name &&
+                            t.date.year == selectedDate.year &&
+                            t.date.month == selectedDate.month &&
+                            t.date.day == selectedDate.day);
+                          if (exists) alreadyBooked.add(p);
+                        }
+
+                        if (alreadyBooked.isNotEmpty) {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('Bereits gebucht?'),
+                              content: Text('Für ${alreadyBooked.length} Personen wurde diese Strafe am gewählten Tag bereits erfasst. Trotzdem buchen?'),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Nein')),
+                                TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Ja, buchen')),
+                              ],
+                            ),
+                          );
+                          if (confirm != true) return;
+                        }
+
                         Navigator.pop(context);
                         for (var person in targetPeople) {
-                          final t = AppTransaction(
-                            id: '${DateTime.now().millisecondsSinceEpoch}_${person.id}',
-                            personId: person.id,
-                            description: selectedPenalty!.name,
-                            amount: -selectedPenalty!.amount,
-                            date: selectedDate,
-                          );
-                          await FirebaseService.addTransaction(t);
+                          for (int i = 0; i < multiplier; i++) {
+                            final t = AppTransaction(
+                              id: '${DateTime.now().millisecondsSinceEpoch}_${person.id}_$i',
+                              personId: person.id,
+                              description: selectedPenalty!.name,
+                              amount: -selectedPenalty!.amount,
+                              date: selectedDate,
+                            );
+                            await FirebaseService.addTransaction(t);
+                          }
                         }
                       },
                 child: Text(isGroupMode ? 'Gruppe buchen' : 'Buchen'),
@@ -631,7 +659,33 @@ class _KassePageState extends State<KassePage> {
                     return ListTile(
                       title: Text(t.description),
                       subtitle: Text(DateFormat('dd.MM.yy').format(t.date)),
-                      trailing: Text('${t.amount.toStringAsFixed(2)} €', style: TextStyle(color: t.amount < 0 ? Colors.red : Colors.green)),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('${t.amount.toStringAsFixed(2)} €', style: TextStyle(color: t.amount < 0 ? Colors.red : Colors.green)),
+                          if (widget.isAdmin)
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                              onPressed: () async {
+                                final confirm = await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text('Eintrag löschen?'),
+                                    content: const Text('Soll dieser Eintrag wirklich dauerhaft entfernt werden?'),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Nein')),
+                                      TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Löschen')),
+                                    ],
+                                  ),
+                                );
+                                if (confirm == true) {
+                                  await FirebaseService.deleteTransaction(t.id);
+                                  Navigator.pop(context);
+                                }
+                              },
+                            ),
+                        ],
+                      ),
                     );
                   },
                 ),
