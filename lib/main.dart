@@ -7,9 +7,6 @@ import 'models/penalty.dart';
 import 'models/app_transaction.dart';
 import 'services/firebase_service.dart';
 
-// IMPORTANT: Insert your generated firebase_options.dart logic here or use the config directly
-// Since I don't have the full flutterfire CLI output, I'll use the config from your message.
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
@@ -68,22 +65,57 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
   }
 
   void _showLoginDialog() {
+    final emailController = TextEditingController();
+    final passwordController = TextEditingController();
+    bool isLoading = false;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Admin Login'),
-        content: const Text('Möchtest du dich als Administrator anmelden?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Abbrechen')),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              // Use signInWithPopup for Web if possible, or handle it in service
-              await FirebaseService.signInWithGoogle();
-            },
-            child: const Text('Mit Google anmelden'),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Admin Login'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: emailController,
+                decoration: const InputDecoration(labelText: 'E-Mail'),
+                keyboardType: TextInputType.emailAddress,
+              ),
+              TextField(
+                controller: passwordController,
+                decoration: const InputDecoration(labelText: 'Passwort'),
+                obscureText: true,
+              ),
+              if (isLoading)
+                const Padding(
+                  padding: EdgeInsets.only(top: 16.0),
+                  child: CircularProgressIndicator(),
+                ),
+            ],
           ),
-        ],
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Abbrechen')),
+            ElevatedButton(
+              onPressed: isLoading ? null : () async {
+                setDialogState(() => isLoading = true);
+                final success = await FirebaseService.signIn(
+                  emailController.text.trim(), 
+                  passwordController.text
+                );
+                if (success) {
+                  Navigator.pop(context);
+                } else {
+                  setDialogState(() => isLoading = false);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Login fehlgeschlagen. Bitte Daten prüfen.')),
+                  );
+                }
+              },
+              child: const Text('Anmelden'),
+            ),
+          ],
+        ),
       ),
     );
   }

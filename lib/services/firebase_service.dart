@@ -1,6 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import '../models/person.dart';
 import '../models/penalty.dart';
 import '../models/app_transaction.dart';
@@ -13,22 +12,13 @@ class FirebaseService {
 
   static Stream<User?> get authStateChanges => _auth.authStateChanges();
 
-  static Future<User?> signInWithGoogle() async {
+  static Future<bool> signIn(String email, String password) async {
     try {
-      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
-      if (googleUser == null) return null;
-
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      final AuthCredential credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      final UserCredential userCredential = await _auth.signInWithCredential(credential);
-      return userCredential.user;
+      await _auth.signInWithEmailAndPassword(email: email, password: password);
+      return true;
     } catch (e) {
-      print('Error Google Sign-In: $e');
-      return null;
+      print('Error Email Sign-In: $e');
+      return false;
     }
   }
 
@@ -38,10 +28,9 @@ class FirebaseService {
     final user = _auth.currentUser;
     if (user == null || user.email == null) return false;
 
-    // Hardcoded Super-Admin
+    // Hardcoded Super-Admin or the shared admin email
     if (user.email == 'felske.mirco@gmail.com') return true;
 
-    // Check others in Firestore
     final doc = await _db.collection('admins').doc(user.email).get();
     return doc.exists;
   }
@@ -51,7 +40,7 @@ class FirebaseService {
   }
 
   static Future<void> removeAdminEmail(String email) {
-    if (email == 'felske.mirco@gmail.com') return Future.value(); // Cannot remove super-admin
+    if (email == 'felske.mirco@gmail.com') return Future.value();
     return _db.collection('admins').doc(email).delete();
   }
 
