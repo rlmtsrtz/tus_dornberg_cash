@@ -534,7 +534,7 @@ class PersonenListPage extends StatelessWidget {
                     final groupPeople = people.where((p) => p.group == group).toList();
                     return isAdmin
                         ? DragTarget<Person>(
-                            onAccept: (p) => FirebaseService.updatePersonGroup(p.id, group),
+                            onAcceptWithDetails: (details) => FirebaseService.updatePersonGroup(details.data.id, group),
                             builder: (context, candidate, _) => Container(
                               margin: const EdgeInsets.all(8),
                               padding: const EdgeInsets.all(8),
