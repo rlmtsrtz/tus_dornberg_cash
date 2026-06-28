@@ -117,7 +117,7 @@ class _KassePageState extends State<KassePage> {
       }
 
       setState(() {
-        _people = people;
+        _people = people..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
         _transactions = transactions;
         _penalties = penalties;
         _isLoading = false;
@@ -387,6 +387,55 @@ class _KassePageState extends State<KassePage> {
     );
   }
 
+  void _showTransactionHistory(Person person) {
+    final history = _transactions
+        .where((t) => t.personId == person.id)
+        .where((t) {
+          if (_selectedMonthStart != null) {
+            return t.date.year == _selectedMonthStart!.year && 
+                   t.date.month == _selectedMonthStart!.month;
+          }
+          return t.date.isAfter(_startDate.subtract(const Duration(seconds: 1))) &&
+                 t.date.isBefore(_endDate.add(const Duration(days: 1)));
+        })
+        .toList()
+      ..sort((a, b) => b.date.compareTo(a.date)); // Neuere zuerst
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Historie: ${person.name}'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: history.isEmpty
+              ? const Text('Keine Einträge im gewählten Zeitraum.')
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: history.length,
+                  itemBuilder: (context, index) {
+                    final t = history[index];
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(t.description),
+                      subtitle: Text(DateFormat('dd.MM.yyyy').format(t.date)),
+                      trailing: Text(
+                        '${t.amount.toStringAsFixed(2).replaceAll('.', ',')} €',
+                        style: TextStyle(
+                          color: t.amount < 0 ? Colors.red : Colors.green,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Schließen')),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
@@ -456,19 +505,22 @@ class _KassePageState extends State<KassePage> {
                 itemBuilder: (context, index) {
                   final p = _people[index];
                   final balance = _calculateBalance(p.id);
-                  return ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: const Color(0xFFA5D6A7),
-                      child: Text(p.name[0], style: const TextStyle(color: Colors.white)),
-                    ),
-                    title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                    subtitle: Text(p.group.displayName),
-                    trailing: Text(
-                      '${balance.toStringAsFixed(2).replaceAll('.', ',')} €',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: balance < 0 ? Colors.red : (balance > 0 ? Colors.green : Colors.black),
+                  return InkWell(
+                    onTap: () => _showTransactionHistory(p),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: const Color(0xFFA5D6A7),
+                        child: Text(p.name[0], style: const TextStyle(color: Colors.white)),
+                      ),
+                      title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: Text(p.group.displayName),
+                      trailing: Text(
+                        '${balance.toStringAsFixed(2).replaceAll('.', ',')} €',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: balance < 0 ? Colors.red : (balance > 0 ? Colors.green : Colors.black),
+                        ),
                       ),
                     ),
                   );
