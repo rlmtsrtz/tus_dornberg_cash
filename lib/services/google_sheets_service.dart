@@ -5,7 +5,7 @@ import '../models/penalty.dart';
 
 class GoogleSheetsService {
   // Aktuelle URL aus der vorherigen Konfiguration
-  static const String _scriptUrl = 'https://script.google.com/macros/s/AKfycbzIY4jYV2U8NEiRkJ0t4BDOuZ-Syist8XMn10VsyzJvyepcr69Ul3bPecR3lDVZTOO-/exec';
+  static const String _scriptUrl = 'https://script.google.com/macros/s/AKfycbxfdtclcKVF36olJtsr6SMrOw-EqTTmBxbaBHdn8djxZYtBhZ0uiz3anBP4DwEUHDUv/exec';
 
   static Future<Map<String, dynamic>> _post(Map<String, dynamic> data) async {
     try {
@@ -49,6 +49,15 @@ class GoogleSheetsService {
     final res = await _post({
       'action': 'deletePerson',
       'id': id,
+    });
+    return res['result'] == 'success';
+  }
+
+  static Future<bool> updatePersonGroup(String id, PersonGroup newGroup) async {
+    final res = await _post({
+      'action': 'updatePersonGroup',
+      'id': id,
+      'group': newGroup.name,
     });
     return res['result'] == 'success';
   }
