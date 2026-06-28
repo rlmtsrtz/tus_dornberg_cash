@@ -79,7 +79,9 @@ class _KassePageState extends State<KassePage> {
 
   DateTime _startDate = DateTime(DateTime.now().year, 6, 1);
   DateTime _endDate = DateTime(DateTime.now().year + 1, 5, 31);
-  int? _selectedMonth; // 1-12
+  
+  // For monthly filtering: null means "Gesamt", otherwise store the specific start of the month
+  DateTime? _selectedMonthStart;
 
   @override
   void initState() {
@@ -129,79 +131,136 @@ class _KassePageState extends State<KassePage> {
     return _transactions
         .where((t) => t.personId == personId)
         .where((t) {
-          if (_selectedMonth != null) {
-            return t.date.month == _selectedMonth && 
-                   t.date.year == (_selectedMonth! < 6 ? _endDate.year : _startDate.year);
+          if (_selectedMonthStart != null) {
+            final nextMonth = DateTime(_selectedMonthStart!.year, _selectedMonthStart!.month + 1, 1);
+            return t.date.isAtSameMomentAs(_selectedMonthStart!) || 
+                   (t.date.isAfter(_selectedMonthStart!) && t.date.isBefore(nextMonth));
           }
+          // Default: Season range
           return t.date.isAfter(_startDate.subtract(const Duration(days: 1))) &&
                  t.date.isBefore(_endDate.add(const Duration(days: 1)));
         })
         .fold(0.0, (sum, t) => sum + t.amount);
   }
 
+  // Generates months based on season start
+  List<DateTime> _getSeasonMonths() {
+    List<DateTime> months = [];
+    DateTime current = DateTime(_startDate.year, _startDate.month, 1);
+    while (current.isBefore(_endDate)) {
+      months.add(current);
+      current = DateTime(current.year, current.month + 1, 1);
+    }
+    return months;
+  }
+
   void _addTransactionDialog() {
     Person? selectedPerson;
     Penalty? selectedPenalty;
+    String? selectedTag;
+
+    // Get all unique tags from available penalties
+    final allTags = _penalties.expand((p) => p.tags).toSet().toList()..sort();
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Strafe/Zahlung buchen'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButton<Person>(
-                value: selectedPerson,
-                hint: const Text('Person wählen'),
-                isExpanded: true,
-                onChanged: (val) => setDialogState(() => selectedPerson = val),
-                items: _people.map((p) => DropdownMenuItem(value: p, child: Text(p.name))).toList(),
-              ),
-              const SizedBox(height: 16),
-              Row(
+        builder: (context, setDialogState) {
+          // Filter penalties by selected tag
+          final filteredPenalties = selectedTag == null 
+              ? _penalties 
+              : _penalties.where((p) => p.tags.contains(selectedTag)).toList();
+
+          return AlertDialog(
+            title: const Text('Strafe/Zahlung buchen'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: DropdownButton<Penalty>(
-                      value: selectedPenalty,
-                      hint: const Text('Strafe wählen'),
-                      isExpanded: true,
-                      onChanged: (val) => setDialogState(() => selectedPenalty = val),
-                      items: _penalties.map((p) => DropdownMenuItem(value: p, child: Text(p.name))).toList(),
+                  DropdownButton<Person>(
+                    value: selectedPerson,
+                    hint: const Text('Person wählen'),
+                    isExpanded: true,
+                    onChanged: (val) => setDialogState(() => selectedPerson = val),
+                    items: _people.map((p) => DropdownMenuItem(value: p, child: Text(p.name))).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Filter nach Tag:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  ),
+                  const SizedBox(height: 4),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        ChoiceChip(
+                          label: const Text('Alle', style: TextStyle(fontSize: 10)),
+                          selected: selectedTag == null,
+                          onSelected: (val) => setDialogState(() => selectedTag = null),
+                        ),
+                        ...allTags.map((tag) => Padding(
+                          padding: const EdgeInsets.only(left: 4.0),
+                          child: ChoiceChip(
+                            label: Text(tag, style: const TextStyle(fontSize: 10)),
+                            selected: selectedTag == tag,
+                            onSelected: (val) {
+                              setDialogState(() {
+                                selectedTag = val ? tag : null;
+                                selectedPenalty = null; // Reset selection if filtered out
+                              });
+                            },
+                          ),
+                        )),
+                      ],
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.account_balance_wallet, color: Colors.green),
-                    tooltip: 'Tilgung',
-                    onPressed: () {
-                      if (selectedPerson == null) return;
-                      _showTilgungDialog(selectedPerson!);
-                    },
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButton<Penalty>(
+                          value: selectedPenalty,
+                          hint: const Text('Strafe wählen'),
+                          isExpanded: true,
+                          onChanged: (val) => setDialogState(() => selectedPenalty = val),
+                          items: filteredPenalties.map((p) => DropdownMenuItem(value: p, child: Text(p.name))).toList(),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.account_balance_wallet, color: Colors.green),
+                        tooltip: 'Tilgung',
+                        onPressed: () {
+                          if (selectedPerson == null) return;
+                          _showTilgungDialog(selectedPerson!);
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Abbrechen')),
-            ElevatedButton(
-              onPressed: (selectedPerson == null || selectedPenalty == null) ? null : () async {
-                final trans = AppTransaction(
-                  id: DateTime.now().millisecondsSinceEpoch.toString(),
-                  personId: selectedPerson!.id,
-                  description: selectedPenalty!.name,
-                  amount: -selectedPenalty!.amount, // All penalties are negative
-                  date: DateTime.now(),
-                );
-                Navigator.pop(context);
-                setState(() => _isLoading = true);
-                await GoogleSheetsService.addTransaction(trans);
-                _loadAllData();
-              },
-              child: const Text('Buchen'),
             ),
-          ],
-        ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Abbrechen')),
+              ElevatedButton(
+                onPressed: (selectedPerson == null || selectedPenalty == null) ? null : () async {
+                  final trans = AppTransaction(
+                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                    personId: selectedPerson!.id,
+                    description: selectedPenalty!.name,
+                    amount: -selectedPenalty!.amount, 
+                    date: DateTime.now(),
+                  );
+                  Navigator.pop(context);
+                  setState(() => _isLoading = true);
+                  await GoogleSheetsService.addTransaction(trans);
+                  _loadAllData();
+                },
+                child: const Text('Buchen'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -229,7 +288,7 @@ class _KassePageState extends State<KassePage> {
                   id: DateTime.now().millisecondsSinceEpoch.toString(),
                   personId: person.id,
                   description: 'Tilgung',
-                  amount: amount, // Repayments are positive
+                  amount: amount, 
                   date: DateTime.now(),
                   isTilgung: true,
                 );
@@ -250,6 +309,8 @@ class _KassePageState extends State<KassePage> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
+
+    final seasonMonths = _getSeasonMonths();
 
     return Scaffold(
       body: Column(
@@ -277,19 +338,23 @@ class _KassePageState extends State<KassePage> {
                   child: Row(
                     children: [
                       FilterChip(
-                        label: const Text('Gesamt'),
-                        selected: _selectedMonth == null,
-                        onSelected: (val) => setState(() => _selectedMonth = null),
+                        label: const Text('Gesamt', style: TextStyle(fontSize: 12)),
+                        selected: _selectedMonthStart == null,
+                        onSelected: (val) => setState(() => _selectedMonthStart = null),
                       ),
                       const SizedBox(width: 8),
-                      ...List.generate(12, (index) {
-                        final month = ((index + 5) % 12) + 1; // Start with June
+                      ...seasonMonths.map((monthStart) {
                         return Padding(
                           padding: const EdgeInsets.only(right: 8.0),
                           child: FilterChip(
-                            label: Text(DateFormat('MMM').format(DateTime(2022, month))),
-                            selected: _selectedMonth == month,
-                            onSelected: (val) => setState(() => _selectedMonth = val ? month : null),
+                            label: Text(
+                              DateFormat('MMM yy').format(monthStart),
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            selected: _selectedMonthStart != null && 
+                                      _selectedMonthStart!.year == monthStart.year && 
+                                      _selectedMonthStart!.month == monthStart.month,
+                            onSelected: (val) => setState(() => _selectedMonthStart = val ? monthStart : null),
                           ),
                         );
                       }),
