@@ -745,22 +745,90 @@ class PersonenListPage extends StatelessWidget {
                   label: const Text('Gruppen verwalten', style: TextStyle(fontSize: 12)),
                 ),
               ) : null,
-              body: ListView.builder(
-                itemCount: people.length,
-                itemBuilder: (context, index) {
-                  final p = people[index];
-                  return ListTile(
-                    title: Text(p.name),
-                    subtitle: Text(p.groups.isEmpty ? 'Keine Gruppe' : p.groups.join(', ')),
-                    onTap: isAdmin ? () => _showPersonDialog(context, groups, person: p) : null,
-                    trailing: isAdmin 
-                        ? IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.red), 
-                            onPressed: () => FirebaseService.deletePerson(p.id)
-                          ) 
-                        : null,
-                  );
-                },
+              body: Row(
+                children: [
+                  Expanded(
+                    flex: 1,
+                    child: Container(
+                      color: Colors.grey[50],
+                      child: Column(
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.all(12.0),
+                            child: Text('Alle Personen', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          ),
+                          Expanded(
+                            child: ListView.builder(
+                              itemCount: people.length,
+                              itemBuilder: (context, index) {
+                                final p = people[index];
+                                return ListTile(
+                                  title: Text(p.name),
+                                  subtitle: Text(p.groups.isEmpty ? 'Keine Gruppe' : p.groups.join(', ')),
+                                  onTap: isAdmin ? () => _showPersonDialog(context, groups, person: p) : null,
+                                  trailing: isAdmin 
+                                      ? IconButton(
+                                          icon: const Icon(Icons.delete, color: Colors.red), 
+                                          onPressed: () => _confirmDelete(context, () => FirebaseService.deletePerson(p.id))
+                                        ) 
+                                      : null,
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const VerticalDivider(width: 1),
+                  Expanded(
+                    flex: 1,
+                    child: Column(
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.all(12.0),
+                          child: Text('Gruppen-Übersicht', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        ),
+                        Expanded(
+                          child: ListView(
+                            children: groups.map((group) {
+                              final groupPeople = people.where((p) => p.groups.contains(group)).toList();
+                              return Container(
+                                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  border: Border.all(color: Colors.grey[200]!),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(group, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2E7D32))),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 6,
+                                      runSpacing: 6,
+                                      children: groupPeople.map((p) => Chip(
+                                        label: Text(p.name, style: const TextStyle(fontSize: 12)),
+                                        backgroundColor: const Color(0xFFF1F8E9),
+                                        side: BorderSide.none,
+                                        padding: EdgeInsets.zero,
+                                        visualDensity: VisualDensity.compact,
+                                      )).toList(),
+                                    ),
+                                    if (groupPeople.isEmpty)
+                                      const Text('Keine Personen', style: TextStyle(color: Colors.grey, fontSize: 12, fontStyle: FontStyle.italic)),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
               floatingActionButton: isAdmin
                   ? FloatingActionButton(
@@ -818,7 +886,7 @@ class PersonenListPage extends StatelessWidget {
                             ),
                             IconButton(
                               icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-                              onPressed: () => FirebaseService.deleteGroup(group),
+                              onPressed: () => _confirmDelete(context, () => FirebaseService.deleteGroup(group)),
                             ),
                           ],
                         ),
@@ -912,6 +980,26 @@ class PersonenListPage extends StatelessWidget {
       ),
     );
   }
+
+  void _confirmDelete(BuildContext context, Function() onDelete) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Wirklich löschen?'),
+        content: const Text('Soll dieser Eintrag dauerhaft entfernt werden?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Abbrechen')),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              onDelete();
+            },
+            child: const Text('Löschen', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // --- STRAFEN LIST PAGE ---
@@ -964,7 +1052,10 @@ class StrafenListPage extends StatelessWidget {
                         ),
                     ],
                   ),
-                  trailing: isAdmin ? IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => FirebaseService.deletePenalty(p.id)) : null,
+                  trailing: isAdmin ? IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red), 
+                    onPressed: () => _confirmDelete(context, () => FirebaseService.deletePenalty(p.id))
+                  ) : null,
                 ),
               );
             },
@@ -1023,6 +1114,26 @@ class StrafenListPage extends StatelessWidget {
               }
             },
             child: Text(penalty == null ? 'Hinzufügen' : 'Speichern'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context, Function() onDelete) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Wirklich löschen?'),
+        content: const Text('Soll dieser Eintrag dauerhaft entfernt werden?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Abbrechen')),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              onDelete();
+            },
+            child: const Text('Löschen', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
