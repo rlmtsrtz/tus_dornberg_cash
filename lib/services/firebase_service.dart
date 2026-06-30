@@ -12,6 +12,7 @@ class FirebaseService {
 
   static Stream<User?> get authStateChanges => _auth.authStateChanges();
 
+  /// Returns null on success, or an error message on failure
   static Future<String?> signIn(String email, String password) async {
     try {
       await _auth.signInWithEmailAndPassword(email: email, password: password);
@@ -28,7 +29,10 @@ class FirebaseService {
   static Future<bool> isAdmin() async {
     final user = _auth.currentUser;
     if (user == null || user.email == null) return false;
+
+    // Hardcoded Super-Admin
     if (user.email == 'felske.mirco@gmail.com') return true;
+
     final doc = await _db.collection('admins').doc(user.email).get();
     return doc.exists;
   }
@@ -62,18 +66,12 @@ class FirebaseService {
     return _db.collection('groups').doc(name).delete();
   }
 
-  // Rename group is tricky because we need to update all persons. 
-  // For simplicity, we can delete and add, and the user handles updating persons.
-  // Or we implement a proper rename.
   static Future<void> renameGroup(String oldName, String newName) async {
     final batch = _db.batch();
     
-    // Add new group
     batch.set(_db.collection('groups').doc(newName), {'createdAt': FieldValue.serverTimestamp()});
-    // Delete old group
     batch.delete(_db.collection('groups').doc(oldName));
     
-    // Update all persons who have this group
     final persons = await _db.collection('people').where('groups', arrayContains: oldName).get();
     for (var doc in persons.docs) {
       List<String> groups = List<String>.from(doc.data()['groups']);
@@ -100,7 +98,11 @@ class FirebaseService {
     return _db.collection('people').doc(id).delete();
   }
 
-  // --- PENALTIES ---
+  static Future<void> updatePersonGroup(String id, PersonGroup newGroup) {
+    return _db.collection('people').doc(id).update({'group': newGroup.name});
+  }
+
+  // --- PENALTY ---
 
   static Stream<List<Penalty>> getPenalties() {
     return _db.collection('penalties').snapshots().map((snapshot) =>
@@ -142,5 +144,18 @@ class FirebaseService {
 
   static Future<void> updateSettings(Map<String, String> settings) {
     return _db.collection('settings').doc('season').set(settings, SetOptions(merge: true));
+  }
+
+  static Stream<Map<String, String>> getPaymentInfo() {
+    return _db.collection('settings').doc('payment').snapshots().map((doc) {
+      if (doc.exists) {
+        return Map<String, String>.from(doc.data()!);
+      }
+      return {'iban': '', 'name': '', 'email': ''};
+    });
+  }
+
+  static Future<void> updatePaymentInfo(Map<String, String> data) {
+    return _db.collection('settings').doc('payment').set(data, SetOptions(merge: true));
   }
 }

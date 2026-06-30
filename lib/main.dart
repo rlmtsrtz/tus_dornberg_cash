@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -268,6 +269,8 @@ class _KassePageState extends State<KassePage> {
   DateTime _startDate = DateTime(DateTime.now().year, 6, 1);
   DateTime _endDate = DateTime(DateTime.now().year + 1, 5, 31);
   DateTime? _selectedMonthStart;
+  String _searchQuery = '';
+  String? _selectedPenaltyFilter;
 
   @override
   void initState() {
@@ -300,6 +303,48 @@ class _KassePageState extends State<KassePage> {
       });
       _loadSettings();
     }
+  }
+
+  void _showPaymentEditDialog(Map<String, String> current) {
+    final ibanC = TextEditingController(text: current['iban']);
+    final nameC = TextEditingController(text: current['name']);
+    final emailC = TextEditingController(text: current['email']);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Zahlungsinformationen bearbeiten'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: ibanC, decoration: const InputDecoration(labelText: 'IBAN')),
+            TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Name des Kontoinhabers')),
+            TextField(controller: emailC, decoration: const InputDecoration(labelText: 'E-Mail für PayPal/Kontakt')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Abbrechen')),
+          ElevatedButton(
+            onPressed: () async {
+              await FirebaseService.updatePaymentInfo({
+                'iban': ibanC.text.trim(),
+                'name': nameC.text.trim(),
+                'email': emailC.text.trim(),
+              });
+              Navigator.pop(context);
+            },
+            child: const Text('Speichern'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _copyToClipboard(String text, String label) {
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$label kopiert!'), duration: const Duration(seconds: 1)),
+    );
   }
 
   double _calculateBalance(String personId, List<AppTransaction> transactions) {
@@ -342,97 +387,174 @@ class _KassePageState extends State<KassePage> {
                 return StreamBuilder<List<String>>(
                   stream: FirebaseService.getGroups(),
                   builder: (context, groupsSnap) {
-                    if (!peopleSnap.hasData || !transSnap.hasData || !penaltySnap.hasData || !groupsSnap.hasData) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
+                    return StreamBuilder<Map<String, String>>(
+                      stream: FirebaseService.getPaymentInfo(),
+                      builder: (context, paymentSnap) {
+                        if (!peopleSnap.hasData || !transSnap.hasData || !penaltySnap.hasData || !groupsSnap.hasData || !paymentSnap.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
 
-                    final people = peopleSnap.data!..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-                    final seasonMonths = _getSeasonMonths();
+                        final paymentInfo = paymentSnap.data!;
+                        
+                        // Filter logic
+                        var filteredPeople = peopleSnap.data!
+                          ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+                        
+                        if (_searchQuery.isNotEmpty) {
+                          filteredPeople = filteredPeople.where((p) => p.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+                        }
 
-                    return Scaffold(
-                      body: Column(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            color: const Color(0xFFF1F8E9),
-                            child: Column(
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      'Saison: ${DateFormat('dd.MM.yy').format(_startDate)} - ${DateFormat('dd.MM.yy').format(_endDate)}',
-                                      style: const TextStyle(fontWeight: FontWeight.bold),
-                                    ),
-                                    if (widget.isAdmin)
-                                      IconButton(
-                                        icon: const Icon(Icons.calendar_month),
-                                        onPressed: _showSeasonSettings,
-                                      ),
-                                  ],
-                                ),
-                                SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: Row(
+                        if (_selectedPenaltyFilter != null) {
+                          filteredPeople = filteredPeople.where((p) {
+                            return transSnap.data!.any((t) => 
+                              t.personId == p.id && 
+                              t.description == _selectedPenaltyFilter &&
+                              t.date.isAfter(_startDate.subtract(const Duration(seconds: 1))) &&
+                              t.date.isBefore(_endDate.add(const Duration(days: 1)))
+                            );
+                          }).toList();
+                        }
+
+                        final seasonMonths = _getSeasonMonths();
+
+                        return Scaffold(
+                          body: Column(
+                            children: [
+                              // Payment Info Card
+                              Card(
+                                margin: const EdgeInsets.all(12),
+                                color: const Color(0xFFE8F5E9),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      FilterChip(
-                                        label: const Text('Gesamt'),
-                                        selected: _selectedMonthStart == null,
-                                        onSelected: (val) => setState(() => _selectedMonthStart = null),
-                                        selectedColor: const Color(0xFFA5D6A7),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          const Text('Zahlungsinformationen', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                          if (widget.isAdmin)
+                                            IconButton(icon: const Icon(Icons.edit, size: 20), onPressed: () => _showPaymentEditDialog(paymentInfo)),
+                                        ],
                                       ),
-                                      const SizedBox(width: 8),
-                                      ...seasonMonths.map((m) => Padding(
-                                        padding: const EdgeInsets.only(right: 8),
-                                        child: FilterChip(
-                                          label: Text(DateFormat('MMM yy').format(m)),
-                                          selected: _selectedMonthStart?.year == m.year && _selectedMonthStart?.month == m.month,
-                                          onSelected: (val) => setState(() => _selectedMonthStart = val ? m : null),
-                                          selectedColor: const Color(0xFFA5D6A7),
-                                        ),
-                                      )),
+                                      const Divider(),
+                                      _buildInfoRow('IBAN', paymentInfo['iban'] ?? ''),
+                                      _buildInfoRow('Name', paymentInfo['name'] ?? ''),
+                                      _buildInfoRow('E-Mail', paymentInfo['email'] ?? ''),
                                     ],
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
-                          Expanded(
-                            child: ListView.builder(
-                              itemCount: people.length,
-                              itemBuilder: (context, index) {
-                                final p = people[index];
-                                final balance = _calculateBalance(p.id, transSnap.data!);
-                                return InkWell(
-                                  onTap: () => _showHistory(context, p, transSnap.data!),
-                                  child: ListTile(
-                                    leading: CircleAvatar(
-                                      backgroundColor: const Color(0xFFA5D6A7),
-                                      child: Text(p.name[0], style: const TextStyle(color: Colors.white)),
+                              ),
+                              // Filter Section
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                color: const Color(0xFFF1F8E9),
+                                child: Column(
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: TextField(
+                                            decoration: const InputDecoration(
+                                              hintText: 'Name suchen...',
+                                              prefixIcon: Icon(Icons.search),
+                                              isDense: true,
+                                              border: OutlineInputBorder(),
+                                            ),
+                                            onChanged: (val) => setState(() => _searchQuery = val),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        DropdownButton<String?>(
+                                          value: _selectedPenaltyFilter,
+                                          hint: const Text('Alle Strafen'),
+                                          items: [
+                                            const DropdownMenuItem(value: null, child: Text('Kein Filter')),
+                                            ...penaltySnap.data!.map((p) => DropdownMenuItem(value: p.name, child: Text(p.name))),
+                                          ],
+                                          onChanged: (val) => setState(() => _selectedPenaltyFilter = val),
+                                        ),
+                                      ],
                                     ),
-                                    title: Text(p.name),
-                                    subtitle: Text(p.groups.join(', ')),
-                                    trailing: Text(
-                                      '${balance.toStringAsFixed(2).replaceAll('.', ',')} €',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: balance < 0 ? Colors.red : (balance > 0 ? Colors.green : Colors.black),
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          'Saison: ${DateFormat('dd.MM.yy').format(_startDate)} - ${DateFormat('dd.MM.yy').format(_endDate)}',
+                                          style: const TextStyle(fontWeight: FontWeight.bold),
+                                        ),
+                                        if (widget.isAdmin)
+                                          IconButton(
+                                            icon: const Icon(Icons.calendar_month),
+                                            onPressed: _showSeasonSettings,
+                                          ),
+                                      ],
+                                    ),
+                                    SingleChildScrollView(
+                                      scrollDirection: Axis.horizontal,
+                                      child: Row(
+                                        children: [
+                                          FilterChip(
+                                            label: const Text('Gesamt'),
+                                            selected: _selectedMonthStart == null,
+                                            onSelected: (val) => setState(() => _selectedMonthStart = null),
+                                            selectedColor: const Color(0xFFA5D6A7),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          ...seasonMonths.map((m) => Padding(
+                                            padding: const EdgeInsets.only(right: 8),
+                                            child: FilterChip(
+                                              label: Text(DateFormat('MMM yy').format(m)),
+                                              selected: _selectedMonthStart?.year == m.year && _selectedMonthStart?.month == m.month,
+                                              onSelected: (val) => setState(() => _selectedMonthStart = val ? m : null),
+                                              selectedColor: const Color(0xFFA5D6A7),
+                                            ),
+                                          )),
+                                        ],
                                       ),
                                     ),
-                                  ),
-                                );
-                              },
-                            ),
+                                  ],
+                                ),
+                              ),
+                              Expanded(
+                                child: ListView.builder(
+                                  itemCount: filteredPeople.length,
+                                  itemBuilder: (context, index) {
+                                    final p = filteredPeople[index];
+                                    final balance = _calculateBalance(p.id, transSnap.data!);
+                                    return InkWell(
+                                      onTap: () => _showHistory(context, p, transSnap.data!),
+                                      child: ListTile(
+                                        leading: CircleAvatar(
+                                          backgroundColor: const Color(0xFFA5D6A7),
+                                          child: Text(p.name[0], style: const TextStyle(color: Colors.white)),
+                                        ),
+                                        title: Text(p.name),
+                                        subtitle: Text(p.groups.join(', ')),
+                                        trailing: Text(
+                                          '${balance.toStringAsFixed(2).replaceAll('.', ',')} €',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: balance < 0 ? Colors.red : (balance > 0 ? Colors.green : Colors.black),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                      floatingActionButton: widget.isAdmin
-                          ? FloatingActionButton(
-                              onPressed: () => _addTransaction(context, people, penaltySnap.data!, transSnap.data!, groupsSnap.data!),
-                              backgroundColor: const Color(0xFF4CAF50),
-                              child: const Icon(Icons.add, color: Colors.white),
-                            )
-                          : null,
+                          floatingActionButton: widget.isAdmin
+                              ? FloatingActionButton(
+                                  onPressed: () => _addTransaction(context, peopleSnap.data!, penaltySnap.data!, transSnap.data!, groupsSnap.data!),
+                                  backgroundColor: const Color(0xFF4CAF50),
+                                  child: const Icon(Icons.add, color: Colors.white),
+                                )
+                              : null,
+                        );
+                      }
                     );
                   }
                 );
@@ -441,6 +563,23 @@ class _KassePageState extends State<KassePage> {
           },
         );
       },
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    if (value.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        children: [
+          Expanded(child: Text('$label: $value', style: const TextStyle(fontSize: 14))),
+          IconButton(
+            icon: const Icon(Icons.copy, size: 18),
+            onPressed: () => _copyToClipboard(value, label),
+            tooltip: '$label kopieren',
+          ),
+        ],
+      ),
     );
   }
 
