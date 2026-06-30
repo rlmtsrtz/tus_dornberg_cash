@@ -3,6 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:screenshot/screenshot.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'models/person.dart';
 import 'models/penalty.dart';
 import 'models/app_transaction.dart';
@@ -59,10 +64,12 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
     super.initState();
     FirebaseService.authStateChanges.listen((user) async {
       final isAdmin = await FirebaseService.isAdmin();
-      setState(() {
-        _user = user;
-        _isAdmin = isAdmin;
-      });
+      if (mounted) {
+        setState(() {
+          _user = user;
+          _isAdmin = isAdmin;
+        });
+      }
     });
   }
 
@@ -105,13 +112,15 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
                   emailController.text.trim(), 
                   passwordController.text
                 );
-                if (errorMessage == null) {
-                  Navigator.pop(context);
-                } else {
-                  setDialogState(() => isLoading = false);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Login fehlgeschlagen: $errorMessage')),
-                  );
+                if (mounted) {
+                  if (errorMessage == null) {
+                    Navigator.pop(context);
+                  } else {
+                    setDialogState(() => isLoading = false);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Login fehlgeschlagen: $errorMessage')),
+                    );
+                  }
                 }
               },
               child: const Text('Anmelden'),
@@ -313,7 +322,6 @@ class TestData {
     for (var i = 0; i < 150; i++) {
       final p = people[i % people.length];
       final pen = penalties[i % penalties.length];
-      // Random date within 25/26 season
       final date = seasonStart.add(Duration(days: i * 2));
       if (date.isAfter(DateTime(2026, 6, 30))) break;
 
@@ -325,7 +333,6 @@ class TestData {
         date: date,
       ));
 
-      // Occasional Tilgung
       if (i % 4 == 0) {
         transactions.add(AppTransaction(
           id: 'test_til_$i',
@@ -368,14 +375,48 @@ class _KassePageState extends State<KassePage> {
   String _searchQuery = '';
   String? _selectedPenaltyFilter;
 
+  DateTime? _realStartDate;
+  DateTime? _realEndDate;
+
+  final ScreenshotController _screenshotController = ScreenshotController();
+  bool _isSearchExpanded = false;
+
   @override
   void initState() {
     super.initState();
     if (widget.isTestDataMode) {
+      _realStartDate = _startDate;
+      _realEndDate = _endDate;
       _startDate = DateTime(2025, 7, 1);
       _endDate = DateTime(2026, 6, 30);
     } else {
       _loadSettings();
+    }
+  }
+
+  @override
+  void didUpdateWidget(KassePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isTestDataMode != oldWidget.isTestDataMode) {
+      if (widget.isTestDataMode) {
+        _realStartDate = _startDate;
+        _realEndDate = _endDate;
+        setState(() {
+          _startDate = DateTime(2025, 7, 1);
+          _endDate = DateTime(2026, 6, 30);
+          _selectedMonthStart = null;
+        });
+      } else {
+        if (_realStartDate != null) {
+          setState(() {
+            _startDate = _realStartDate!;
+            _endDate = _realEndDate!;
+            _selectedMonthStart = null;
+          });
+        } else {
+          _loadSettings();
+        }
+      }
     }
   }
 
@@ -498,21 +539,21 @@ class _KassePageState extends State<KassePage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Daten teilen'),
+        title: const Text('Visualisierung teilen'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.list_alt),
-              title: const Text('Alle Kontostände (Tabelle)'),
+              leading: const Icon(Icons.table_view),
+              title: const Text('Alle Salden als Bild'),
               onTap: () {
                 Navigator.pop(context);
-                _copyTableToClipboard(people, transactions);
+                _shareVisualTable(people, transactions);
               },
             ),
             ListTile(
-              leading: const Icon(Icons.person),
-              title: const Text('Historie pro Spieler wählen...'),
+              leading: const Icon(Icons.person_outline),
+              title: const Text('Spieler-Historie als Bild...'),
               onTap: () {
                 Navigator.pop(context);
                 _showPlayerShareDialog(people, transactions);
@@ -524,21 +565,51 @@ class _KassePageState extends State<KassePage> {
     );
   }
 
-  void _copyTableToClipboard(List<Person> people, List<AppTransaction> transactions) {
-    String table = "TuS Dornberg Cash - Salden (${DateFormat('dd.MM.yy').format(DateTime.now())})\n\n";
-    table += "Name | Betrag\n";
-    table += "------------------\n";
-    
+  void _shareVisualTable(List<Person> people, List<AppTransaction> transactions) async {
     var sorted = List<Person>.from(people)..sort((a,b) => a.name.compareTo(b.name));
-    for (var p in sorted) {
-      double bal = _calculateBalance(p.id, transactions);
-      if (bal != 0) {
-        table += "${p.name} | ${bal.toStringAsFixed(2).replaceAll('.', ',')} €\n";
-      }
-    }
     
-    Clipboard.setData(ClipboardData(text: table));
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tabelle in Zwischenablage kopiert!')));
+    Widget tableWidget = Container(
+      padding: const EdgeInsets.all(20),
+      color: Colors.white,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("TuS Dornberg Cash - Salden", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green[800])),
+          Text("Stand: ${DateFormat('dd.MM.yyyy').format(DateTime.now())}", style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          const SizedBox(height: 20),
+          Table(
+            border: TableBorder.all(color: Colors.grey[300]!),
+            children: [
+              TableRow(
+                decoration: BoxDecoration(color: Colors.green[50]),
+                children: [
+                  const Padding(padding: EdgeInsets.all(8), child: Text("Name", style: TextStyle(fontWeight: FontWeight.bold))),
+                  const Padding(padding: EdgeInsets.all(8), child: Text("Betrag", style: TextStyle(fontWeight: FontWeight.bold))),
+                ],
+              ),
+              ...sorted.map((p) {
+                double bal = _calculateBalance(p.id, transactions);
+                return TableRow(
+                  children: [
+                    Padding(padding: const EdgeInsets.all(8), child: Text(p.name)),
+                    Padding(
+                      padding: const EdgeInsets.all(8), 
+                      child: Text(
+                        "${bal.toStringAsFixed(2).replaceAll('.', ',')} €",
+                        style: TextStyle(color: bal < 0 ? Colors.red : (bal > 0 ? Colors.green : Colors.black)),
+                      )
+                    ),
+                  ],
+                );
+              }),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    _captureAndShare(tableWidget, "Salden_Dornberg_Cash.png");
   }
 
   void _showPlayerShareDialog(List<Person> people, List<AppTransaction> transactions) {
@@ -555,7 +626,7 @@ class _KassePageState extends State<KassePage> {
               title: Text(people[i].name),
               onTap: () {
                 Navigator.pop(context);
-                _copyPlayerHistory(people[i], transactions);
+                _sharePlayerVisualHistory(people[i], transactions);
               },
             ),
           ),
@@ -564,33 +635,77 @@ class _KassePageState extends State<KassePage> {
     );
   }
 
-  void _copyPlayerHistory(Person p, List<AppTransaction> transactions) {
-    String msg = "Historie für ${p.name}:\n\n";
+  void _sharePlayerVisualHistory(Person p, List<AppTransaction> transactions) {
     var history = transactions.where((t) => t.personId == p.id).toList();
-    for (var t in history) {
-      msg += "${DateFormat('dd.MM.yy').format(t.date)}: ${t.description} (${t.amount.toStringAsFixed(2).replaceAll('.', ',')} €)\n";
-    }
-    msg += "\nGesamt: ${_calculateBalance(p.id, transactions).toStringAsFixed(2).replaceAll('.', ',')} €";
-    
-    Clipboard.setData(ClipboardData(text: msg));
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Spieler-Historie kopiert!')));
-  }
+    double total = _calculateBalance(p.id, transactions);
 
-  void _showSearchDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Spieler suchen'),
-        content: TextField(
-          autofocus: true,
-          decoration: const InputDecoration(hintText: 'Name eingeben...'),
-          onChanged: (val) => setState(() => _searchQuery = val),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fertig')),
+    Widget tableWidget = Container(
+      padding: const EdgeInsets.all(20),
+      color: Colors.white,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("Historie: ${p.name}", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green[800])),
+          const SizedBox(height: 20),
+          Table(
+            border: TableBorder.all(color: Colors.grey[300]!),
+            children: [
+              TableRow(
+                decoration: BoxDecoration(color: Colors.green[50]),
+                children: [
+                  const Padding(padding: EdgeInsets.all(8), child: Text("Datum", style: TextStyle(fontWeight: FontWeight.bold))),
+                  const Padding(padding: EdgeInsets.all(8), child: Text("Beschreibung", style: TextStyle(fontWeight: FontWeight.bold))),
+                  const Padding(padding: EdgeInsets.all(8), child: Text("Betrag", style: TextStyle(fontWeight: FontWeight.bold))),
+                ],
+              ),
+              ...history.map((t) => TableRow(
+                children: [
+                  Padding(padding: const EdgeInsets.all(8), child: Text(DateFormat('dd.MM.yy').format(t.date))),
+                  Padding(padding: const EdgeInsets.all(8), child: Text(t.description)),
+                  Padding(
+                    padding: const EdgeInsets.all(8), 
+                    child: Text("${t.amount.toStringAsFixed(2).replaceAll('.', ',')} €", style: TextStyle(color: t.amount < 0 ? Colors.red : Colors.green))
+                  ),
+                ],
+              )),
+              TableRow(
+                decoration: BoxDecoration(color: Colors.grey[50]),
+                children: [
+                  const SizedBox(),
+                  const Padding(padding: EdgeInsets.all(8), child: Text("Gesamt", style: TextStyle(fontWeight: FontWeight.bold))),
+                  Padding(
+                    padding: const EdgeInsets.all(8), 
+                    child: Text("${total.toStringAsFixed(2).replaceAll('.', ',')} €", style: const TextStyle(fontWeight: FontWeight.bold))
+                  ),
+                ],
+              ),
+            ],
+          ),
         ],
       ),
     );
+
+    _captureAndShare(tableWidget, "Historie_${p.name.replaceAll(' ', '_')}.png");
+  }
+
+  void _captureAndShare(Widget widget, String filename) async {
+    final Uint8List? imageBytes = await _screenshotController.captureFromWidget(
+      Material(child: widget),
+      delay: const Duration(milliseconds: 100),
+      context: context,
+    );
+
+    if (imageBytes != null) {
+      if (kIsWeb) {
+        await Share.shareXFiles([XFile.fromData(imageBytes, name: filename, mimeType: 'image/png')]);
+      } else {
+        final directory = await getTemporaryDirectory();
+        final imagePath = await File('${directory.path}/$filename').create();
+        await imagePath.writeAsBytes(imageBytes);
+        await Share.shareXFiles([XFile(imagePath.path)]);
+      }
+    }
   }
 
   void _showFilterDialog(List<Penalty> penalties) {
@@ -605,10 +720,14 @@ class _KassePageState extends State<KassePage> {
             children: [
               ListTile(
                 title: const Text('Alle anzeigen'),
-                leading: Radio<String?>(value: null, groupValue: _selectedPenaltyFilter, onChanged: (v) {
-                  setState(() => _selectedPenaltyFilter = v);
-                  Navigator.pop(context);
-                }),
+                leading: Radio<String?>(
+                  value: null, 
+                  groupValue: _selectedPenaltyFilter, 
+                  onChanged: (v) {
+                    setState(() => _selectedPenaltyFilter = v);
+                    Navigator.pop(context);
+                  }
+                ),
                 onTap: () {
                   setState(() => _selectedPenaltyFilter = null);
                   Navigator.pop(context);
@@ -616,10 +735,14 @@ class _KassePageState extends State<KassePage> {
               ),
               ...penalties.map((p) => ListTile(
                 title: Text(p.name),
-                leading: Radio<String?>(value: p.name, groupValue: _selectedPenaltyFilter, onChanged: (v) {
-                  setState(() => _selectedPenaltyFilter = v);
-                  Navigator.pop(context);
-                }),
+                leading: Radio<String?>(
+                  value: p.name, 
+                  groupValue: _selectedPenaltyFilter, 
+                  onChanged: (v) {
+                    setState(() => _selectedPenaltyFilter = v);
+                    Navigator.pop(context);
+                  }
+                ),
                 onTap: () {
                   setState(() => _selectedPenaltyFilter = p.name);
                   Navigator.pop(context);
@@ -661,7 +784,6 @@ class _KassePageState extends State<KassePage> {
 
                         final paymentInfo = paymentSnap.data!;
                         
-                        // Filter logic
                         var filteredPeople = peopleSnap.data!
                           ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
                         
@@ -685,7 +807,6 @@ class _KassePageState extends State<KassePage> {
                         return Scaffold(
                           body: Column(
                             children: [
-                              // Payment Info Card
                               Card(
                                 margin: const EdgeInsets.all(12),
                                 color: const Color(0xFFE8F5E9),
@@ -720,7 +841,6 @@ class _KassePageState extends State<KassePage> {
                                   ),
                                 ),
                               ),
-                              // Filter Section
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                 color: const Color(0xFFF1F8E9),
@@ -730,10 +850,39 @@ class _KassePageState extends State<KassePage> {
                                       children: [
                                         const Text('Spieler & Strafen', style: TextStyle(fontWeight: FontWeight.bold)),
                                         const Spacer(),
-                                        IconButton(
-                                          icon: Icon(Icons.search, color: _searchQuery.isNotEmpty ? Colors.green : null),
-                                          onPressed: _showSearchDialog,
-                                          tooltip: 'Name suchen',
+                                        AnimatedContainer(
+                                          duration: const Duration(milliseconds: 300),
+                                          width: _isSearchExpanded ? 200 : 40,
+                                          height: 40,
+                                          child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.end,
+                                            children: [
+                                              if (_isSearchExpanded)
+                                                Expanded(
+                                                  child: TextField(
+                                                    autofocus: true,
+                                                    decoration: const InputDecoration(
+                                                      hintText: 'Suche...',
+                                                      isDense: true,
+                                                      contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                                                      border: OutlineInputBorder(),
+                                                      prefixIcon: Icon(Icons.search, size: 18),
+                                                    ),
+                                                    onChanged: (val) => setState(() => _searchQuery = val),
+                                                  ),
+                                                ),
+                                              IconButton(
+                                                icon: Icon(_isSearchExpanded ? Icons.close : Icons.search, 
+                                                     color: _searchQuery.isNotEmpty ? Colors.green : null),
+                                                onPressed: () {
+                                                  setState(() {
+                                                    _isSearchExpanded = !_isSearchExpanded;
+                                                    if (!_isSearchExpanded) _searchQuery = '';
+                                                  });
+                                                },
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                         IconButton(
                                           icon: Icon(Icons.filter_list, color: _selectedPenaltyFilter != null ? Colors.green : null),
@@ -889,12 +1038,10 @@ class _KassePageState extends State<KassePage> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
-          // Filter penalties by mode and selected tag
           final modeTag = isGroupMode ? 'Gruppe' : 'Einzeln';
           final modeFiltered = penalties.where((p) => p.tags.contains(modeTag)).toList();
           final filtered = selectedTag == null ? modeFiltered : modeFiltered.where((p) => p.tags.contains(selectedTag)).toList();
           
-          // Get unique tags for the current mode, excluding "Gruppe" and "Einzeln"
           final allTags = modeFiltered.expand((p) => p.tags)
               .toSet()
               .where((t) => t != 'Gruppe' && t != 'Einzeln')
@@ -1011,7 +1158,6 @@ class _KassePageState extends State<KassePage> {
                 onPressed: (targetPeople.isEmpty || selectedPenalty == null)
                     ? null
                     : () async {
-                        // Duplicate Check
                         List<Person> alreadyBooked = [];
                         for (var p in targetPeople) {
                           bool exists = existingTransactions.any((t) => 
@@ -1038,7 +1184,7 @@ class _KassePageState extends State<KassePage> {
                           if (confirm != true) return;
                         }
 
-                        Navigator.pop(context);
+                        if (mounted) Navigator.pop(context);
                         for (var person in targetPeople) {
                           for (int i = 0; i < multiplier; i++) {
                             final t = AppTransaction(
@@ -1052,10 +1198,10 @@ class _KassePageState extends State<KassePage> {
                               await FirebaseService.addTransaction(t);
                             } else {
                               TestData.transactions.add(t);
-                              setState(() {}); // Trigger refresh in test mode
                             }
                           }
                         }
+                        setState(() {});
                       },
                 child: Text(isGroupMode ? 'Gruppe buchen' : 'Buchen'),
               ),
@@ -1087,8 +1233,10 @@ class _KassePageState extends State<KassePage> {
                   date: date,
                   isTilgung: true,
                 );
-                Navigator.pop(context);
-                Navigator.pop(context);
+                if (mounted) {
+                  Navigator.pop(context);
+                  Navigator.pop(context);
+                }
                 if (!widget.isTestDataMode) {
                   await FirebaseService.addTransaction(t);
                 } else {
@@ -1138,7 +1286,7 @@ class _KassePageState extends State<KassePage> {
                                     TestData.transactions.removeWhere((item) => item.id == t.id);
                                     setState(() {});
                                   }
-                                  Navigator.pop(context);
+                                  if (mounted) Navigator.pop(context);
                                 }
                               },
                             ),
@@ -1401,7 +1549,7 @@ class _PersonenListPageState extends State<PersonenListPage> {
                   if (idx != -1) TestData.groups[idx] = controller.text.trim();
                   setState(() {});
                 }
-                Navigator.pop(context);
+                if (mounted) Navigator.pop(context);
               }
             },
             child: const Text('Speichern'),
@@ -1465,7 +1613,7 @@ class _PersonenListPageState extends State<PersonenListPage> {
                     }
                     setState(() {});
                   }
-                  Navigator.pop(context);
+                  if (mounted) Navigator.pop(context);
                 }
               },
               child: Text(person == null ? 'Hinzufügen' : 'Speichern'),
@@ -1630,7 +1778,7 @@ class _StrafenListPageState extends State<StrafenListPage> {
                   }
                   setState(() {});
                 }
-                Navigator.pop(context);
+                if (mounted) Navigator.pop(context);
               }
             },
             child: Text(penalty == null ? 'Hinzufügen' : 'Speichern'),
