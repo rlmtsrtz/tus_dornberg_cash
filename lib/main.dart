@@ -340,8 +340,19 @@ class _KassePageState extends State<KassePage> {
     );
   }
 
-  void _copyToClipboard(String text, String label) {
-    Clipboard.setData(ClipboardData(text: text));
+  String _formatIBAN(String iban) {
+    String clean = iban.replaceAll(RegExp(r'\s+'), '').toUpperCase();
+    String formatted = '';
+    for (int i = 0; i < clean.length; i++) {
+      if (i > 0 && i % 4 == 0) formatted += ' ';
+      formatted += clean[i];
+    }
+    return formatted;
+  }
+
+  void _copyToClipboard(String text, String label, {bool cleanSpaces = false}) {
+    String finalData = cleanSpaces ? text.replaceAll(' ', '') : text;
+    Clipboard.setData(ClipboardData(text: finalData));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('$label kopiert!'), duration: const Duration(seconds: 1)),
     );
@@ -371,6 +382,88 @@ class _KassePageState extends State<KassePage> {
       count++;
     }
     return months;
+  }
+
+  void _shareData(List<Person> people, List<AppTransaction> transactions) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Daten teilen'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.list_alt),
+              title: const Text('Alle Kontostände (Tabelle)'),
+              onTap: () {
+                Navigator.pop(context);
+                _copyTableToClipboard(people, transactions);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.person),
+              title: const Text('Historie pro Spieler wählen...'),
+              onTap: () {
+                Navigator.pop(context);
+                _showPlayerShareDialog(people, transactions);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _copyTableToClipboard(List<Person> people, List<AppTransaction> transactions) {
+    String table = "TuS Dornberg Cash - Salden (${DateFormat('dd.MM.yy').format(DateTime.now())})\n\n";
+    table += "Name | Betrag\n";
+    table += "------------------\n";
+    
+    var sorted = List<Person>.from(people)..sort((a,b) => a.name.compareTo(b.name));
+    for (var p in sorted) {
+      double bal = _calculateBalance(p.id, transactions);
+      if (bal != 0) {
+        table += "${p.name} | ${bal.toStringAsFixed(2).replaceAll('.', ',')} €\n";
+      }
+    }
+    
+    Clipboard.setData(ClipboardData(text: table));
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tabelle in Zwischenablage kopiert!')));
+  }
+
+  void _showPlayerShareDialog(List<Person> people, List<AppTransaction> transactions) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Spieler wählen'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: people.length,
+            itemBuilder: (context, i) => ListTile(
+              title: Text(people[i].name),
+              onTap: () {
+                Navigator.pop(context);
+                _copyPlayerHistory(people[i], transactions);
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _copyPlayerHistory(Person p, List<AppTransaction> transactions) {
+    String msg = "Historie für ${p.name}:\n\n";
+    var history = transactions.where((t) => t.personId == p.id).toList();
+    for (var t in history) {
+      msg += "${DateFormat('dd.MM.yy').format(t.date)}: ${t.description} (${t.amount.toStringAsFixed(2).replaceAll('.', ',')} €)\n";
+    }
+    msg += "\nGesamt: ${_calculateBalance(p.id, transactions).toStringAsFixed(2).replaceAll('.', ',')} €";
+    
+    Clipboard.setData(ClipboardData(text: msg));
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Spieler-Historie kopiert!')));
   }
 
   @override
@@ -433,12 +526,22 @@ class _KassePageState extends State<KassePage> {
                                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
                                           const Text('Zahlungsinformationen', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                          if (widget.isAdmin)
-                                            IconButton(icon: const Icon(Icons.edit, size: 20), onPressed: () => _showPaymentEditDialog(paymentInfo)),
+                                          Row(
+                                            children: [
+                                              if (widget.isAdmin)
+                                                IconButton(
+                                                  icon: const Icon(Icons.share, size: 20),
+                                                  onPressed: () => _shareData(peopleSnap.data!, transSnap.data!),
+                                                  tooltip: 'Daten teilen',
+                                                ),
+                                              if (widget.isAdmin)
+                                                IconButton(icon: const Icon(Icons.edit, size: 20), onPressed: () => _showPaymentEditDialog(paymentInfo)),
+                                            ],
+                                          ),
                                         ],
                                       ),
                                       const Divider(),
-                                      _buildInfoRow('IBAN', paymentInfo['iban'] ?? ''),
+                                      _buildInfoRow('IBAN', _formatIBAN(paymentInfo['iban'] ?? ''), isIban: true),
                                       _buildInfoRow('Name', paymentInfo['name'] ?? ''),
                                       _buildInfoRow('E-Mail', paymentInfo['email'] ?? ''),
                                     ],
@@ -456,7 +559,7 @@ class _KassePageState extends State<KassePage> {
                                         Expanded(
                                           child: TextField(
                                             decoration: const InputDecoration(
-                                              hintText: 'Name suchen...',
+                                              hintText: 'Suche...',
                                               prefixIcon: Icon(Icons.search),
                                               isDense: true,
                                               border: OutlineInputBorder(),
@@ -467,9 +570,9 @@ class _KassePageState extends State<KassePage> {
                                         const SizedBox(width: 8),
                                         DropdownButton<String?>(
                                           value: _selectedPenaltyFilter,
-                                          hint: const Text('Alle Strafen'),
+                                          hint: const Icon(Icons.filter_list),
                                           items: [
-                                            const DropdownMenuItem(value: null, child: Text('Kein Filter')),
+                                            const DropdownMenuItem(value: null, child: Text('Alle')),
                                             ...penaltySnap.data!.map((p) => DropdownMenuItem(value: p.name, child: Text(p.name))),
                                           ],
                                           onChanged: (val) => setState(() => _selectedPenaltyFilter = val),
@@ -530,7 +633,7 @@ class _KassePageState extends State<KassePage> {
                                           backgroundColor: const Color(0xFFA5D6A7),
                                           child: Text(p.name[0], style: const TextStyle(color: Colors.white)),
                                         ),
-                                        title: Text(p.name),
+                                        title: _buildHighlightedText(p.name, _searchQuery),
                                         subtitle: Text(p.groups.join(', ')),
                                         trailing: Text(
                                           '${balance.toStringAsFixed(2).replaceAll('.', ',')} €',
@@ -566,7 +669,34 @@ class _KassePageState extends State<KassePage> {
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
+  Widget _buildHighlightedText(String text, String query) {
+    if (query.isEmpty) return Text(text);
+    final matches = query.toLowerCase();
+    final lowerText = text.toLowerCase();
+    
+    List<TextSpan> spans = [];
+    int start = 0;
+    int indexOfMatch;
+
+    while ((indexOfMatch = lowerText.indexOf(matches, start)) != -1) {
+      if (indexOfMatch > start) {
+        spans.add(TextSpan(text: text.substring(start, indexOfMatch)));
+      }
+      spans.add(TextSpan(
+        text: text.substring(indexOfMatch, indexOfMatch + query.length),
+        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, backgroundColor: Color(0xFFE8F5E9)),
+      ));
+      start = indexOfMatch + query.length;
+    }
+    
+    if (start < text.length) {
+      spans.add(TextSpan(text: text.substring(start)));
+    }
+
+    return RichText(text: TextSpan(children: spans, style: const TextStyle(color: Colors.black, fontSize: 16)));
+  }
+
+  Widget _buildInfoRow(String label, String value, {bool isIban = false}) {
     if (value.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
@@ -575,7 +705,7 @@ class _KassePageState extends State<KassePage> {
           Expanded(child: Text('$label: $value', style: const TextStyle(fontSize: 14))),
           IconButton(
             icon: const Icon(Icons.copy, size: 18),
-            onPressed: () => _copyToClipboard(value, label),
+            onPressed: () => _copyToClipboard(value, label, cleanSpaces: isIban),
             tooltip: '$label kopieren',
           ),
         ],
