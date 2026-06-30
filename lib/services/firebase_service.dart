@@ -98,10 +98,6 @@ class FirebaseService {
     return _db.collection('people').doc(id).delete();
   }
 
-  static Future<void> updatePersonGroup(String id, PersonGroup newGroup) {
-    return _db.collection('people').doc(id).update({'group': newGroup.name});
-  }
-
   // --- PENALTY ---
 
   static Stream<List<Penalty>> getPenalties() {
