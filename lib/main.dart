@@ -326,7 +326,6 @@ class TestData {
     final totalDays = seasonEnd.difference(seasonStart).inDays;
 
     for (var p in people) {
-      // Each player gets a random number of penalties (3-10)
       int numPenalties = 3 + random.nextInt(8);
       for (int i = 0; i < numPenalties; i++) {
         final pen = penalties[random.nextInt(penalties.length)];
@@ -340,7 +339,6 @@ class TestData {
           date: date,
         ));
 
-        // 30% chance for a repayment (Tilgung)
         if (random.nextDouble() < 0.3) {
           transactions.add(AppTransaction(
             id: 'test_til_${p.id}_$i',
@@ -353,7 +351,6 @@ class TestData {
         }
       }
     }
-    // Sort transactions by date for better initial view
     transactions.sort((a, b) => b.date.compareTo(a.date));
   }
 
@@ -524,11 +521,10 @@ class _KassePageState extends State<KassePage> {
     return transactions
         .where((t) => t.personId == personId)
         .where((t) {
-          // If a penalty filter is active, only count that specific penalty
           if (penaltyFilter != null) {
             return t.description == penaltyFilter;
           }
-          return true; // Count all if no penalty filter
+          return true;
         })
         .where((t) {
           if (_selectedMonthStart != null) {
@@ -584,55 +580,70 @@ class _KassePageState extends State<KassePage> {
   }
 
   void _shareVisualTable(List<Person> people, List<AppTransaction> transactions, Map<String, String> paymentInfo) async {
-    var sorted = List<Person>.from(people)..sort((a,b) => a.name.compareTo(b.name));
-    
+    // Determine which people to show in the screenshot (respecting current filters)
+    var filteredInView = people.where((p) {
+       if (_searchQuery.isNotEmpty && !p.name.toLowerCase().contains(_searchQuery.toLowerCase())) return false;
+       // If penalty filter is on, we only show people with a non-zero balance for that penalty to keep screenshot clean
+       if (_selectedPenaltyFilter != null) {
+         return _calculateBalance(p.id, transactions, penaltyFilter: _selectedPenaltyFilter) != 0;
+       }
+       return true;
+    }).toList()..sort((a,b) => a.name.compareTo(b.name));
+
     Widget tableWidget = Container(
-      padding: const EdgeInsets.all(20),
+      width: 600, // Fixed width for consistent rendering
+      padding: const EdgeInsets.all(30),
       color: Colors.white,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("TuS Dornberg Cash - Salden", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green[800])),
-          Text("Stand: ${DateFormat('dd.MM.yyyy').format(DateTime.now())}", style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          Text("TuS Dornberg Cash - Salden", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.green[800])),
+          Text("Stand: ${DateFormat('dd.MM.yyyy').format(DateTime.now())}", style: const TextStyle(fontSize: 14, color: Colors.grey)),
           if (_selectedPenaltyFilter != null)
-            Text("Filter: $_selectedPenaltyFilter", style: const TextStyle(fontSize: 14, color: Colors.green)),
-          const SizedBox(height: 16),
-          // Payment Info included here
+            Padding(
+              padding: const EdgeInsets.only(top: 4.0),
+              child: Text("Filter: $_selectedPenaltyFilter", style: const TextStyle(fontSize: 16, color: Colors.green, fontWeight: FontWeight.bold)),
+            ),
+          const SizedBox(height: 20),
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(15),
             decoration: BoxDecoration(color: Colors.green[50], borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.green[100]!)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("Zahlungsinformationen:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                Text("IBAN: ${_formatIBAN(paymentInfo['iban'] ?? '')}", style: const TextStyle(fontSize: 11)),
-                Text("Name: ${paymentInfo['name'] ?? ''}", style: const TextStyle(fontSize: 11)),
-                Text("E-Mail: ${paymentInfo['email'] ?? ''}", style: const TextStyle(fontSize: 11)),
+                const Text("Zahlungsinformationen:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                Text("IBAN: ${_formatIBAN(paymentInfo['iban'] ?? '')}", style: const TextStyle(fontSize: 13)),
+                Text("Name: ${paymentInfo['name'] ?? ''}", style: const TextStyle(fontSize: 13)),
+                Text("E-Mail: ${paymentInfo['email'] ?? ''}", style: const TextStyle(fontSize: 13)),
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 30),
           Table(
+            columnWidths: const {
+              0: FlexColumnWidth(3),
+              1: FlexColumnWidth(1),
+            },
             border: TableBorder.all(color: Colors.grey[300]!),
             children: [
               TableRow(
                 decoration: BoxDecoration(color: Colors.green[50]),
                 children: [
-                  const Padding(padding: EdgeInsets.all(8), child: Text("Name", style: TextStyle(fontWeight: FontWeight.bold))),
-                  const Padding(padding: EdgeInsets.all(8), child: Text("Betrag", style: TextStyle(fontWeight: FontWeight.bold))),
+                  const Padding(padding: EdgeInsets.all(12), child: Text("Name", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                  const Padding(padding: EdgeInsets.all(12), child: Text("Betrag", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
                 ],
               ),
-              ...sorted.map((p) {
+              ...filteredInView.map((p) {
                 double bal = _calculateBalance(p.id, transactions, penaltyFilter: _selectedPenaltyFilter);
                 return TableRow(
                   children: [
-                    Padding(padding: const EdgeInsets.all(8), child: Text(p.name)),
+                    Padding(padding: const EdgeInsets.all(12), child: Text(p.name, style: const TextStyle(fontSize: 15))),
                     Padding(
-                      padding: const EdgeInsets.all(8), 
+                      padding: const EdgeInsets.all(12), 
                       child: Text(
                         "${bal.toStringAsFixed(2).replaceAll('.', ',')} €",
-                        style: TextStyle(color: bal < 0 ? Colors.red : (bal > 0 ? Colors.green : Colors.black)),
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: bal < 0 ? Colors.red : (bal > 0 ? Colors.green : Colors.black)),
                       )
                     ),
                   ],
@@ -709,34 +720,40 @@ class _KassePageState extends State<KassePage> {
     double total = history.fold(0.0, (sum, t) => sum + t.amount);
 
     Widget tableWidget = Container(
-      padding: const EdgeInsets.all(20),
+      width: 600,
+      padding: const EdgeInsets.all(30),
       color: Colors.white,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("Historie: ${p.name}", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green[800])),
+          Text("Historie: ${p.name}", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.green[800])),
           if (penaltyFilter != null)
-            Text("Filter: $penaltyFilter", style: const TextStyle(fontSize: 14, color: Colors.green)),
-          const SizedBox(height: 20),
+            Text("Filter: $penaltyFilter", style: const TextStyle(fontSize: 16, color: Colors.green, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 25),
           Table(
+            columnWidths: const {
+              0: FlexColumnWidth(1),
+              1: FlexColumnWidth(2),
+              2: FlexColumnWidth(1),
+            },
             border: TableBorder.all(color: Colors.grey[300]!),
             children: [
               TableRow(
                 decoration: BoxDecoration(color: Colors.green[50]),
                 children: [
-                  const Padding(padding: EdgeInsets.all(8), child: Text("Datum", style: TextStyle(fontWeight: FontWeight.bold))),
-                  const Padding(padding: EdgeInsets.all(8), child: Text("Beschreibung", style: TextStyle(fontWeight: FontWeight.bold))),
-                  const Padding(padding: EdgeInsets.all(8), child: Text("Betrag", style: TextStyle(fontWeight: FontWeight.bold))),
+                  const Padding(padding: EdgeInsets.all(12), child: Text("Datum", style: TextStyle(fontWeight: FontWeight.bold))),
+                  const Padding(padding: EdgeInsets.all(12), child: Text("Beschreibung", style: TextStyle(fontWeight: FontWeight.bold))),
+                  const Padding(padding: EdgeInsets.all(12), child: Text("Betrag", style: TextStyle(fontWeight: FontWeight.bold))),
                 ],
               ),
               ...history.map((t) => TableRow(
                 children: [
-                  Padding(padding: const EdgeInsets.all(8), child: Text(DateFormat('dd.MM.yy').format(t.date))),
-                  Padding(padding: const EdgeInsets.all(8), child: Text(t.description)),
+                  Padding(padding: const EdgeInsets.all(12), child: Text(DateFormat('dd.MM.yy').format(t.date))),
+                  Padding(padding: const EdgeInsets.all(12), child: Text(t.description)),
                   Padding(
-                    padding: const EdgeInsets.all(8), 
-                    child: Text("${t.amount.toStringAsFixed(2).replaceAll('.', ',')} €", style: TextStyle(color: t.amount < 0 ? Colors.red : Colors.green))
+                    padding: const EdgeInsets.all(12), 
+                    child: Text("${t.amount.toStringAsFixed(2).replaceAll('.', ',')} €", style: TextStyle(fontWeight: FontWeight.bold, color: t.amount < 0 ? Colors.red : Colors.green))
                   ),
                 ],
               )),
@@ -744,10 +761,10 @@ class _KassePageState extends State<KassePage> {
                 decoration: BoxDecoration(color: Colors.grey[50]),
                 children: [
                   const SizedBox(),
-                  const Padding(padding: EdgeInsets.all(8), child: Text("Gesamt", style: TextStyle(fontWeight: FontWeight.bold))),
+                  const Padding(padding: EdgeInsets.all(12), child: Text("Gesamt", style: TextStyle(fontWeight: FontWeight.bold))),
                   Padding(
-                    padding: const EdgeInsets.all(8), 
-                    child: Text("${total.toStringAsFixed(2).replaceAll('.', ',')} €", style: const TextStyle(fontWeight: FontWeight.bold))
+                    padding: const EdgeInsets.all(12), 
+                    child: Text("${total.toStringAsFixed(2).replaceAll('.', ',')} €", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16))
                   ),
                 ],
               ),
@@ -761,11 +778,12 @@ class _KassePageState extends State<KassePage> {
   }
 
   void _captureAndShare(Widget widget, String filename) async {
-    // captureFromWidget with a specified context and pixelRatio helps on mobile browsers
+    // Capture from a hidden widget with defined constraints for mobile browsers
     final Uint8List? imageBytes = await _screenshotController.captureFromWidget(
       Material(child: widget),
-      delay: const Duration(milliseconds: 100),
+      delay: const Duration(milliseconds: 200),
       context: context,
+      pixelRatio: 3.0, // High quality
     );
 
     if (imageBytes != null) {
@@ -859,21 +877,9 @@ class _KassePageState extends State<KassePage> {
                         var filteredPeople = peopleSnap.data!
                           ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
                         
-                        // First, apply name search filter
+                        // ONLY name search should hide people from the main list view
                         if (_searchQuery.isNotEmpty) {
                           filteredPeople = filteredPeople.where((p) => p.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
-                        }
-
-                        // Then, if a penalty filter is active, only show people who actually have that penalty in the period
-                        if (_selectedPenaltyFilter != null) {
-                          filteredPeople = filteredPeople.where((p) {
-                            return transSnap.data!.any((t) => 
-                              t.personId == p.id && 
-                              t.description == _selectedPenaltyFilter &&
-                              t.date.isAfter(_startDate.subtract(const Duration(seconds: 1))) &&
-                              t.date.isBefore(_endDate.add(const Duration(days: 1)))
-                            );
-                          }).toList();
                         }
 
                         final seasonMonths = _getSeasonMonths();
