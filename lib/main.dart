@@ -509,9 +509,16 @@ class _KassePageState extends State<KassePage> {
     );
   }
 
-  double _calculateBalance(String personId, List<AppTransaction> transactions) {
+  double _calculateBalance(String personId, List<AppTransaction> transactions, {String? penaltyFilter}) {
     return transactions
         .where((t) => t.personId == personId)
+        .where((t) {
+          // If a penalty filter is active, only count that specific penalty
+          if (penaltyFilter != null) {
+            return t.description == penaltyFilter;
+          }
+          return true; // Count all if no penalty filter
+        })
         .where((t) {
           if (_selectedMonthStart != null) {
             return t.date.year == _selectedMonthStart!.year && 
@@ -535,7 +542,7 @@ class _KassePageState extends State<KassePage> {
     return months;
   }
 
-  void _shareData(List<Person> people, List<AppTransaction> transactions) {
+  void _shareData(List<Person> people, List<AppTransaction> transactions, List<Penalty> penalties, Map<String, String> paymentInfo) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -548,7 +555,7 @@ class _KassePageState extends State<KassePage> {
               title: const Text('Alle Salden als Bild'),
               onTap: () {
                 Navigator.pop(context);
-                _shareVisualTable(people, transactions);
+                _shareVisualTable(people, transactions, paymentInfo);
               },
             ),
             ListTile(
@@ -556,7 +563,7 @@ class _KassePageState extends State<KassePage> {
               title: const Text('Spieler-Historie als Bild...'),
               onTap: () {
                 Navigator.pop(context);
-                _showPlayerShareDialog(people, transactions);
+                _showPlayerShareDialog(people, transactions, penalties);
               },
             ),
           ],
@@ -565,7 +572,7 @@ class _KassePageState extends State<KassePage> {
     );
   }
 
-  void _shareVisualTable(List<Person> people, List<AppTransaction> transactions) async {
+  void _shareVisualTable(List<Person> people, List<AppTransaction> transactions, Map<String, String> paymentInfo) async {
     var sorted = List<Person>.from(people)..sort((a,b) => a.name.compareTo(b.name));
     
     Widget tableWidget = Container(
@@ -577,6 +584,23 @@ class _KassePageState extends State<KassePage> {
         children: [
           Text("TuS Dornberg Cash - Salden", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green[800])),
           Text("Stand: ${DateFormat('dd.MM.yyyy').format(DateTime.now())}", style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          if (_selectedPenaltyFilter != null)
+            Text("Filter: $_selectedPenaltyFilter", style: const TextStyle(fontSize: 14, color: Colors.green)),
+          const SizedBox(height: 16),
+          // Payment Info included here
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: Colors.green[50], borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.green[100]!)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Zahlungsinformationen:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                Text("IBAN: ${_formatIBAN(paymentInfo['iban'] ?? '')}", style: const TextStyle(fontSize: 11)),
+                Text("Name: ${paymentInfo['name'] ?? ''}", style: const TextStyle(fontSize: 11)),
+                Text("E-Mail: ${paymentInfo['email'] ?? ''}", style: const TextStyle(fontSize: 11)),
+              ],
+            ),
+          ),
           const SizedBox(height: 20),
           Table(
             border: TableBorder.all(color: Colors.grey[300]!),
@@ -589,7 +613,7 @@ class _KassePageState extends State<KassePage> {
                 ],
               ),
               ...sorted.map((p) {
-                double bal = _calculateBalance(p.id, transactions);
+                double bal = _calculateBalance(p.id, transactions, penaltyFilter: _selectedPenaltyFilter);
                 return TableRow(
                   children: [
                     Padding(padding: const EdgeInsets.all(8), child: Text(p.name)),
@@ -612,7 +636,7 @@ class _KassePageState extends State<KassePage> {
     _captureAndShare(tableWidget, "Salden_Dornberg_Cash.png");
   }
 
-  void _showPlayerShareDialog(List<Person> people, List<AppTransaction> transactions) {
+  void _showPlayerShareDialog(List<Person> people, List<AppTransaction> transactions, List<Penalty> penalties) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -626,7 +650,7 @@ class _KassePageState extends State<KassePage> {
               title: Text(people[i].name),
               onTap: () {
                 Navigator.pop(context);
-                _sharePlayerVisualHistory(people[i], transactions);
+                _showPenaltyFilterShareDialog(people[i], transactions, penalties);
               },
             ),
           ),
@@ -635,9 +659,43 @@ class _KassePageState extends State<KassePage> {
     );
   }
 
-  void _sharePlayerVisualHistory(Person p, List<AppTransaction> transactions) {
+  void _showPenaltyFilterShareDialog(Person p, List<AppTransaction> transactions, List<Penalty> penalties) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Filter für ${p.name}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: const Text('Alle Transaktionen'),
+              onTap: () {
+                Navigator.pop(context);
+                _sharePlayerVisualHistory(p, transactions);
+              },
+            ),
+            const Divider(),
+            const Text("Nach Strafe filtern:", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            ...penalties.map((pen) => ListTile(
+              title: Text(pen.name),
+              onTap: () {
+                Navigator.pop(context);
+                _sharePlayerVisualHistory(p, transactions, penaltyFilter: pen.name);
+              },
+            )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _sharePlayerVisualHistory(Person p, List<AppTransaction> transactions, {String? penaltyFilter}) {
     var history = transactions.where((t) => t.personId == p.id).toList();
-    double total = _calculateBalance(p.id, transactions);
+    if (penaltyFilter != null) {
+      history = history.where((t) => t.description == penaltyFilter).toList();
+    }
+    
+    double total = history.fold(0.0, (sum, t) => sum + t.amount);
 
     Widget tableWidget = Container(
       padding: const EdgeInsets.all(20),
@@ -647,6 +705,8 @@ class _KassePageState extends State<KassePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text("Historie: ${p.name}", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green[800])),
+          if (penaltyFilter != null)
+            Text("Filter: $penaltyFilter", style: const TextStyle(fontSize: 14, color: Colors.green)),
           const SizedBox(height: 20),
           Table(
             border: TableBorder.all(color: Colors.grey[300]!),
@@ -787,10 +847,12 @@ class _KassePageState extends State<KassePage> {
                         var filteredPeople = peopleSnap.data!
                           ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
                         
+                        // First, apply name search filter
                         if (_searchQuery.isNotEmpty) {
                           filteredPeople = filteredPeople.where((p) => p.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
                         }
 
+                        // Then, if a penalty filter is active, only show people who actually have that penalty in the period
                         if (_selectedPenaltyFilter != null) {
                           filteredPeople = filteredPeople.where((p) {
                             return transSnap.data!.any((t) => 
@@ -824,7 +886,7 @@ class _KassePageState extends State<KassePage> {
                                               if (widget.isAdmin)
                                                 IconButton(
                                                   icon: const Icon(Icons.share, size: 20),
-                                                  onPressed: () => _shareData(peopleSnap.data!, transSnap.data!),
+                                                  onPressed: () => _shareData(peopleSnap.data!, transSnap.data!, penaltySnap.data!, paymentInfo),
                                                   tooltip: 'Daten teilen',
                                                 ),
                                               if (widget.isAdmin)
@@ -937,7 +999,7 @@ class _KassePageState extends State<KassePage> {
                                   itemCount: filteredPeople.length,
                                   itemBuilder: (context, index) {
                                     final p = filteredPeople[index];
-                                    final balance = _calculateBalance(p.id, transSnap.data!);
+                                    final balance = _calculateBalance(p.id, transSnap.data!, penaltyFilter: _selectedPenaltyFilter);
                                     return InkWell(
                                       onTap: () => _showHistory(context, p, transSnap.data!),
                                       child: ListTile(
