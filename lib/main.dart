@@ -250,6 +250,7 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
                     ),
               itemBuilder: (context) => [
                 if (_user != null) PopupMenuItem(child: Text(_user!.email ?? '')),
+                if (_isAdmin) // Test data toggle only for admins
                 PopupMenuItem(
                   onTap: () {
                     setState(() {
@@ -1060,8 +1061,7 @@ class _KassePageState extends State<KassePage> {
     final lowerText = text.toLowerCase();
     
     List<TextSpan> spans = [];
-    int start = 0;
-    int indexOfMatch;
+    int start = 0; int indexOfMatch;
 
     while ((indexOfMatch = lowerText.indexOf(matches, start)) != -1) {
       if (indexOfMatch > start) {
