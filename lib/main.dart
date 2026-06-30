@@ -7,6 +7,7 @@ import 'package:screenshot/screenshot.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'models/person.dart';
 import 'models/penalty.dart';
@@ -318,32 +319,41 @@ class TestData {
     ];
 
     transactions = [];
+    final random = Random();
     final seasonStart = DateTime(2025, 7, 1);
-    for (var i = 0; i < 150; i++) {
-      final p = people[i % people.length];
-      final pen = penalties[i % penalties.length];
-      final date = seasonStart.add(Duration(days: i * 2));
-      if (date.isAfter(DateTime(2026, 6, 30))) break;
+    final seasonEnd = DateTime(2026, 6, 30);
+    final totalDays = seasonEnd.difference(seasonStart).inDays;
 
-      transactions.add(AppTransaction(
-        id: 'test_t_$i',
-        personId: p.id,
-        description: pen.name,
-        amount: -pen.amount,
-        date: date,
-      ));
-
-      if (i % 4 == 0) {
+    for (var p in people) {
+      // Each player gets a random number of penalties (3-10)
+      int numPenalties = 3 + random.nextInt(8);
+      for (int i = 0; i < numPenalties; i++) {
+        final pen = penalties[random.nextInt(penalties.length)];
+        final date = seasonStart.add(Duration(days: random.nextInt(totalDays)));
+        
         transactions.add(AppTransaction(
-          id: 'test_til_$i',
+          id: 'test_t_${p.id}_$i',
           personId: p.id,
-          description: 'Tilgung',
-          amount: pen.amount * 2,
-          date: date.add(const Duration(days: 1)),
-          isTilgung: true,
+          description: pen.name,
+          amount: -pen.amount,
+          date: date,
         ));
+
+        // 30% chance for a repayment (Tilgung)
+        if (random.nextDouble() < 0.3) {
+          transactions.add(AppTransaction(
+            id: 'test_til_${p.id}_$i',
+            personId: p.id,
+            description: 'Tilgung',
+            amount: pen.amount,
+            date: date.add(Duration(days: 1 + random.nextInt(10))),
+            isTilgung: true,
+          ));
+        }
       }
     }
+    // Sort transactions by date for better initial view
+    transactions.sort((a, b) => b.date.compareTo(a.date));
   }
 
   static Stream<List<Person>> getPeopleStream() => Stream.value(people);
@@ -750,6 +760,7 @@ class _KassePageState extends State<KassePage> {
   }
 
   void _captureAndShare(Widget widget, String filename) async {
+    // captureFromWidget with a specified context and pixelRatio helps on mobile browsers
     final Uint8List? imageBytes = await _screenshotController.captureFromWidget(
       Material(child: widget),
       delay: const Duration(milliseconds: 100),
