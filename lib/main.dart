@@ -799,7 +799,7 @@ class _KassePageState extends State<KassePage> {
     final Uint8List? imageBytes = await _screenshotController.captureFromWidget(
       Material(child: widget),
       context: context,
-      pixelRatio: 4.5, // Crisp enough for extreme zooming
+      pixelRatio: 6, // Crisp enough for extreme zooming
     );
 
     if (imageBytes != null) {
