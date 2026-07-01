@@ -580,70 +580,57 @@ class _KassePageState extends State<KassePage> {
   }
 
   void _shareVisualTable(List<Person> people, List<AppTransaction> transactions, Map<String, String> paymentInfo) async {
-    // Determine which people to show in the screenshot (respecting current filters)
-    var filteredInView = people.where((p) {
-       if (_searchQuery.isNotEmpty && !p.name.toLowerCase().contains(_searchQuery.toLowerCase())) return false;
-       // If penalty filter is on, we only show people with a non-zero balance for that penalty to keep screenshot clean
-       if (_selectedPenaltyFilter != null) {
-         return _calculateBalance(p.id, transactions, penaltyFilter: _selectedPenaltyFilter) != 0;
-       }
-       return true;
-    }).toList()..sort((a,b) => a.name.compareTo(b.name));
-
+    // Compact high-res table
+    var sorted = List<Person>.from(people)..sort((a,b) => a.name.compareTo(b.name));
+    
     Widget tableWidget = Container(
-      width: 600, // Fixed width for consistent rendering
-      padding: const EdgeInsets.all(30),
+      width: 400, // Narrower for better mobile browser handling
+      padding: const EdgeInsets.all(20),
       color: Colors.white,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("TuS Dornberg Cash - Salden", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.green[800])),
-          Text("Stand: ${DateFormat('dd.MM.yyyy').format(DateTime.now())}", style: const TextStyle(fontSize: 14, color: Colors.grey)),
+          Text("TuS Dornberg Cash - Salden", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green[800])),
+          Text("Stand: ${DateFormat('dd.MM.yyyy').format(DateTime.now())}", style: const TextStyle(fontSize: 10, color: Colors.grey)),
           if (_selectedPenaltyFilter != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 4.0),
-              child: Text("Filter: $_selectedPenaltyFilter", style: const TextStyle(fontSize: 16, color: Colors.green, fontWeight: FontWeight.bold)),
-            ),
-          const SizedBox(height: 20),
+            Text("Filter: $_selectedPenaltyFilter", style: const TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
           Container(
-            padding: const EdgeInsets.all(15),
-            decoration: BoxDecoration(color: Colors.green[50], borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.green[100]!)),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: Colors.green[50], borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.green[100]!)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("Zahlungsinformationen:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                Text("IBAN: ${_formatIBAN(paymentInfo['iban'] ?? '')}", style: const TextStyle(fontSize: 13)),
-                Text("Name: ${paymentInfo['name'] ?? ''}", style: const TextStyle(fontSize: 13)),
-                Text("E-Mail: ${paymentInfo['email'] ?? ''}", style: const TextStyle(fontSize: 13)),
+                const Text("Zahlungsinformationen:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
+                Text("IBAN: ${_formatIBAN(paymentInfo['iban'] ?? '')}", style: const TextStyle(fontSize: 9)),
+                Text("Name: ${paymentInfo['name'] ?? ''}", style: const TextStyle(fontSize: 9)),
+                Text("E-Mail: ${paymentInfo['email'] ?? ''}", style: const TextStyle(fontSize: 9)),
               ],
             ),
           ),
-          const SizedBox(height: 30),
+          const SizedBox(height: 15),
           Table(
-            columnWidths: const {
-              0: FlexColumnWidth(3),
-              1: FlexColumnWidth(1),
-            },
+            columnWidths: const {0: FlexColumnWidth(3), 1: FlexColumnWidth(1)},
             border: TableBorder.all(color: Colors.grey[300]!),
             children: [
               TableRow(
                 decoration: BoxDecoration(color: Colors.green[50]),
                 children: [
-                  const Padding(padding: EdgeInsets.all(12), child: Text("Name", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
-                  const Padding(padding: EdgeInsets.all(12), child: Text("Betrag", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                  const Padding(padding: EdgeInsets.all(8), child: Text("Name", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                  const Padding(padding: EdgeInsets.all(8), child: Text("Betrag", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                 ],
               ),
-              ...filteredInView.map((p) {
+              ...sorted.map((p) {
                 double bal = _calculateBalance(p.id, transactions, penaltyFilter: _selectedPenaltyFilter);
                 return TableRow(
                   children: [
-                    Padding(padding: const EdgeInsets.all(12), child: Text(p.name, style: const TextStyle(fontSize: 15))),
+                    Padding(padding: const EdgeInsets.all(8), child: Text(p.name, style: const TextStyle(fontSize: 11))),
                     Padding(
-                      padding: const EdgeInsets.all(12), 
+                      padding: const EdgeInsets.all(8), 
                       child: Text(
                         "${bal.toStringAsFixed(2).replaceAll('.', ',')} €",
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: bal < 0 ? Colors.red : (bal > 0 ? Colors.green : Colors.black)),
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: bal < 0 ? Colors.red : (bal > 0 ? Colors.green : Colors.black)),
                       )
                     ),
                   ],
@@ -720,40 +707,36 @@ class _KassePageState extends State<KassePage> {
     double total = history.fold(0.0, (sum, t) => sum + t.amount);
 
     Widget tableWidget = Container(
-      width: 600,
-      padding: const EdgeInsets.all(30),
+      width: 400,
+      padding: const EdgeInsets.all(20),
       color: Colors.white,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("Historie: ${p.name}", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.green[800])),
+          Text("Historie: ${p.name}", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green[800])),
           if (penaltyFilter != null)
-            Text("Filter: $penaltyFilter", style: const TextStyle(fontSize: 16, color: Colors.green, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 25),
+            Text("Filter: $penaltyFilter", style: const TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 15),
           Table(
-            columnWidths: const {
-              0: FlexColumnWidth(1),
-              1: FlexColumnWidth(2),
-              2: FlexColumnWidth(1),
-            },
+            columnWidths: const {0: FlexColumnWidth(1), 1: FlexColumnWidth(2), 2: FlexColumnWidth(1)},
             border: TableBorder.all(color: Colors.grey[300]!),
             children: [
               TableRow(
                 decoration: BoxDecoration(color: Colors.green[50]),
                 children: [
-                  const Padding(padding: EdgeInsets.all(12), child: Text("Datum", style: TextStyle(fontWeight: FontWeight.bold))),
-                  const Padding(padding: EdgeInsets.all(12), child: Text("Beschreibung", style: TextStyle(fontWeight: FontWeight.bold))),
-                  const Padding(padding: EdgeInsets.all(12), child: Text("Betrag", style: TextStyle(fontWeight: FontWeight.bold))),
+                  const Padding(padding: EdgeInsets.all(8), child: Text("Datum", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10))),
+                  const Padding(padding: EdgeInsets.all(8), child: Text("Beschreibung", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10))),
+                  const Padding(padding: EdgeInsets.all(8), child: Text("Betrag", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10))),
                 ],
               ),
               ...history.map((t) => TableRow(
                 children: [
-                  Padding(padding: const EdgeInsets.all(12), child: Text(DateFormat('dd.MM.yy').format(t.date))),
-                  Padding(padding: const EdgeInsets.all(12), child: Text(t.description)),
+                  Padding(padding: const EdgeInsets.all(8), child: Text(DateFormat('dd.MM.yy').format(t.date), style: const TextStyle(fontSize: 9))),
+                  Padding(padding: const EdgeInsets.all(8), child: Text(t.description, style: const TextStyle(fontSize: 9))),
                   Padding(
-                    padding: const EdgeInsets.all(12), 
-                    child: Text("${t.amount.toStringAsFixed(2).replaceAll('.', ',')} €", style: TextStyle(fontWeight: FontWeight.bold, color: t.amount < 0 ? Colors.red : Colors.green))
+                    padding: const EdgeInsets.all(8), 
+                    child: Text("${t.amount.toStringAsFixed(2).replaceAll('.', ',')} €", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: t.amount < 0 ? Colors.red : Colors.green))
                   ),
                 ],
               )),
@@ -761,10 +744,10 @@ class _KassePageState extends State<KassePage> {
                 decoration: BoxDecoration(color: Colors.grey[50]),
                 children: [
                   const SizedBox(),
-                  const Padding(padding: EdgeInsets.all(12), child: Text("Gesamt", style: TextStyle(fontWeight: FontWeight.bold))),
+                  const Padding(padding: EdgeInsets.all(8), child: Text("Gesamt", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10))),
                   Padding(
-                    padding: const EdgeInsets.all(12), 
-                    child: Text("${total.toStringAsFixed(2).replaceAll('.', ',')} €", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16))
+                    padding: const EdgeInsets.all(8), 
+                    child: Text("${total.toStringAsFixed(2).replaceAll('.', ',')} €", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11))
                   ),
                 ],
               ),
@@ -778,12 +761,11 @@ class _KassePageState extends State<KassePage> {
   }
 
   void _captureAndShare(Widget widget, String filename) async {
-    // Capture from a hidden widget with defined constraints for mobile browsers
+    // Smaller widget with high pixel ratio for "zoomable" crispness
     final Uint8List? imageBytes = await _screenshotController.captureFromWidget(
       Material(child: widget),
-      delay: const Duration(milliseconds: 200),
       context: context,
-      pixelRatio: 3.0, // High quality
+      pixelRatio: 4.0, // High-def DPI
     );
 
     if (imageBytes != null) {
@@ -1332,15 +1314,28 @@ class _KassePageState extends State<KassePage> {
   }
 
   void _showHistory(BuildContext context, Person person, List<AppTransaction> transactions) {
-    final history = transactions.where((t) => t.personId == person.id).toList();
+    var history = transactions.where((t) => t.personId == person.id).toList();
+    
+    // Apply penalty filter if active
+    if (_selectedPenaltyFilter != null) {
+      history = history.where((t) => t.description == _selectedPenaltyFilter).toList();
+    }
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Historie: ${person.name}'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Historie: ${person.name}', style: const TextStyle(fontSize: 18)),
+            if (_selectedPenaltyFilter != null)
+              Text('Filter: $_selectedPenaltyFilter', style: const TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.bold)),
+          ],
+        ),
         content: SizedBox(
           width: double.maxFinite,
           child: history.isEmpty
-              ? const Text('Keine Einträge.')
+              ? const Text('Keine Einträge für diesen Filter.')
               : ListView.builder(
                   shrinkWrap: true,
                   itemCount: history.length,
