@@ -3,10 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:screenshot/screenshot.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:path_provider/path_provider.dart';
-import 'dart:io';
 import 'dart:math';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'models/person.dart';
@@ -387,7 +383,6 @@ class _KassePageState extends State<KassePage> {
   DateTime? _realStartDate;
   DateTime? _realEndDate;
 
-  final ScreenshotController _screenshotController = ScreenshotController();
   bool _isSearchExpanded = false;
 
   @override
@@ -569,259 +564,6 @@ class _KassePageState extends State<KassePage> {
     return months;
   }
 
-  void _shareData(List<Person> people, List<AppTransaction> transactions, List<Penalty> penalties, Map<String, String> paymentInfo) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Visualisierung teilen'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.table_view),
-              title: const Text('Alle Salden als Bild'),
-              onTap: () {
-                Navigator.pop(context);
-                _shareVisualTable(people, transactions, paymentInfo);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.person_outline),
-              title: const Text('Spieler-Historie als Bild...'),
-              onTap: () {
-                Navigator.pop(context);
-                _showPlayerShareDialog(people, transactions, penalties);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _shareVisualTable(List<Person> people, List<AppTransaction> transactions, Map<String, String> paymentInfo) async {
-    var sorted = List<Person>.from(people)..sort((a,b) => a.name.compareTo(b.name));
-    bool ibanPref = paymentInfo['preferred'] == 'iban';
-    
-    // Explicit Height Logic: Header(180) + Rows(each 35) + Buffer(20)
-    double calculatedHeight = 180 + (sorted.length * 100) + 20;
-
-    Widget tableWidget = Container(
-      width: 350, 
-      height: calculatedHeight, // Forced height
-      padding: const EdgeInsets.all(15),
-      color: Colors.white,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text("TuS Dornberg Cash - Salden", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green[800])),
-          Text("Stand: ${DateFormat('dd.MM.yyyy').format(DateTime.now())}", style: const TextStyle(fontSize: 9, color: Colors.grey)),
-          if (_selectedPenaltyFilter != null)
-            Text("Filter: $_selectedPenaltyFilter", style: const TextStyle(fontSize: 11, color: Colors.green, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 10),
-          
-          // Payment Info grouped
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: Colors.green[50], borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.green[100]!)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text("Präferierte Zahlungsmethode:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
-                if (ibanPref) ...[
-                  Text("IBAN: ${_formatIBAN(paymentInfo['iban'] ?? '')}", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                  Text("Inhaber: ${paymentInfo['name'] ?? ''}", style: const TextStyle(fontSize: 8)),
-                ] else ...[
-                  Text("E-Mail: ${paymentInfo['email'] ?? ''}", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                ],
-                const SizedBox(height: 6),
-                const Text("Sekundäre Zahlungsmethode:", style: TextStyle(fontSize: 9, color: Colors.grey)),
-                if (!ibanPref) ...[
-                  Text("IBAN: ${_formatIBAN(paymentInfo['iban'] ?? '')}", style: const TextStyle(fontSize: 8)),
-                  Text("Inhaber: ${paymentInfo['name'] ?? ''}", style: const TextStyle(fontSize: 7)),
-                ] else ...[
-                  Text("E-Mail: ${paymentInfo['email'] ?? ''}", style: const TextStyle(fontSize: 8)),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Table(
-            columnWidths: const {0: FlexColumnWidth(3), 1: FlexColumnWidth(1)},
-            border: TableBorder.all(color: Colors.grey[200]!),
-            children: [
-              TableRow(
-                decoration: BoxDecoration(color: Colors.green[50]),
-                children: [
-                  const Padding(padding: EdgeInsets.all(6), child: Text("Name", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
-                  const Padding(padding: EdgeInsets.all(6), child: Text("Betrag", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
-                ],
-              ),
-              ...sorted.map((p) {
-                double bal = _calculateBalance(p.id, transactions, penaltyFilter: _selectedPenaltyFilter);
-                return TableRow(
-                  children: [
-                    Padding(padding: const EdgeInsets.all(6), child: Text(p.name, style: const TextStyle(fontSize: 10))),
-                    Padding(
-                      padding: const EdgeInsets.all(6), 
-                      child: Text(
-                        "${bal.toStringAsFixed(2).replaceAll('.', ',')} €",
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: bal < 0 ? Colors.red : (bal > 0 ? Colors.green : Colors.black)),
-                      )
-                    ),
-                  ],
-                );
-              }),
-            ],
-          ),
-        ],
-      ),
-    );
-
-    _captureAndShare(tableWidget, "Salden_Dornberg_Cash.png");
-  }
-
-  void _showPlayerShareDialog(List<Person> people, List<AppTransaction> transactions, List<Penalty> penalties) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Spieler wählen'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: people.length,
-            itemBuilder: (context, i) => ListTile(
-              title: Text(people[i].name),
-              onTap: () {
-                Navigator.pop(context);
-                _showPenaltyFilterShareDialog(people[i], transactions, penalties);
-              },
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showPenaltyFilterShareDialog(Person p, List<AppTransaction> transactions, List<Penalty> penalties) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Filter für ${p.name}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              title: const Text('Alle Transaktionen'),
-              onTap: () {
-                Navigator.pop(context);
-                _sharePlayerVisualHistory(p, transactions);
-              },
-            ),
-            const Divider(),
-            const Text("Nach Strafe filtern:", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-            ...penalties.map((pen) => ListTile(
-              title: Text(pen.name),
-              onTap: () {
-                Navigator.pop(context);
-                _sharePlayerVisualHistory(p, transactions, penaltyFilter: pen.name);
-              },
-            )),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _sharePlayerVisualHistory(Person p, List<AppTransaction> transactions, {String? penaltyFilter}) {
-    var history = transactions.where((t) => t.personId == p.id).toList();
-    if (penaltyFilter != null) {
-      history = history.where((t) => t.description == penaltyFilter).toList();
-    }
-    
-    double total = history.fold(0.0, (sum, t) => sum + t.amount);
-    
-    // Explicit Height Logic for History
-    double calculatedHeight = 100 + (history.length * 30) + 50;
-
-    Widget tableWidget = Container(
-      width: 350,
-      height: calculatedHeight,
-      padding: const EdgeInsets.all(15),
-      color: Colors.white,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text("Historie: ${p.name}", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green[800])),
-          if (penaltyFilter != null)
-            Text("Filter: $penaltyFilter", style: const TextStyle(fontSize: 11, color: Colors.green, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-          Table(
-            columnWidths: const {0: FlexColumnWidth(1), 1: FlexColumnWidth(2), 2: FlexColumnWidth(1)},
-            border: TableBorder.all(color: Colors.grey[200]!),
-            children: [
-              TableRow(
-                decoration: BoxDecoration(color: Colors.green[50]),
-                children: [
-                  const Padding(padding: EdgeInsets.all(6), child: Text("Datum", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 9))),
-                  const Padding(padding: EdgeInsets.all(6), child: Text("Beschreibung", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 9))),
-                  const Padding(padding: EdgeInsets.all(6), child: Text("Betrag", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 9))),
-                ],
-              ),
-              ...history.map((t) => TableRow(
-                children: [
-                  Padding(padding: const EdgeInsets.all(6), child: Text(DateFormat('dd.MM.yy').format(t.date), style: const TextStyle(fontSize: 8))),
-                  Padding(padding: const EdgeInsets.all(6), child: Text(t.description, style: const TextStyle(fontSize: 8))),
-                  Padding(
-                    padding: const EdgeInsets.all(6), 
-                    child: Text("${t.amount.toStringAsFixed(2).replaceAll('.', ',')} €", style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: t.amount < 0 ? Colors.red : Colors.green))
-                  ),
-                ],
-              )),
-              TableRow(
-                decoration: BoxDecoration(color: Colors.grey[50]),
-                children: [
-                  const SizedBox(),
-                  const Padding(padding: EdgeInsets.all(6), child: Text("Gesamt", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 9))),
-                  Padding(
-                    padding: const EdgeInsets.all(6), 
-                    child: Text("${total.toStringAsFixed(2).replaceAll('.', ',')} €", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10))
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-
-    _captureAndShare(tableWidget, "Historie_${p.name.replaceAll(' ', '_')}.png");
-  }
-
-  void _captureAndShare(Widget widget, String filename) async {
-    // Ultra-High-Def logic: small layout, huge pixel ratio
-    final Uint8List? imageBytes = await _screenshotController.captureFromWidget(
-      Material(child: widget),
-      context: context,
-      pixelRatio: 8, // Crisp enough for extreme zooming
-    );
-
-    if (imageBytes != null) {
-      if (kIsWeb) {
-        await Share.shareXFiles([XFile.fromData(imageBytes, name: filename, mimeType: 'image/png')]);
-      } else {
-        final directory = await getTemporaryDirectory();
-        final imagePath = await File('${directory.path}/$filename').create();
-        await imagePath.writeAsBytes(imageBytes);
-        await Share.shareXFiles([XFile(imagePath.path)]);
-      }
-    }
-  }
-
   void _showFilterDialog(List<Penalty> penalties) {
     showDialog(
       context: context,
@@ -923,18 +665,8 @@ class _KassePageState extends State<KassePage> {
                                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
                                           const Text('Zahlungsinformationen', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                          Row(
-                                            children: [
-                                              if (widget.isAdmin)
-                                                IconButton(
-                                                  icon: const Icon(Icons.share, size: 20),
-                                                  onPressed: () => _shareData(peopleSnap.data!, transSnap.data!, penaltySnap.data!, paymentInfo),
-                                                  tooltip: 'Daten teilen',
-                                                ),
-                                              if (widget.isAdmin)
-                                                IconButton(icon: const Icon(Icons.edit, size: 20), onPressed: () => _showPaymentEditDialog(paymentInfo)),
-                                            ],
-                                          ),
+                                          if (widget.isAdmin)
+                                            IconButton(icon: const Icon(Icons.edit, size: 20), onPressed: () => _showPaymentEditDialog(paymentInfo)),
                                         ],
                                       ),
                                       const Divider(),
@@ -1879,7 +1611,7 @@ class _StrafenListPageState extends State<StrafenListPage> {
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: [
+              children: [
               TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Name')),
               TextField(controller: amountC, decoration: const InputDecoration(labelText: 'Betrag (€)'), keyboardType: TextInputType.number),
               TextField(controller: tagsC, decoration: const InputDecoration(labelText: 'Tags (komma-getrennt)')),
