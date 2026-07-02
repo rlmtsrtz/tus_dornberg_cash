@@ -106,8 +106,8 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
               onPressed: isLoading ? null : () async {
                 setDialogState(() => isLoading = true);
                 final errorMessage = await FirebaseService.signIn(
-                  emailController.text.trim(), 
-                  passwordController.text
+                    emailController.text.trim(),
+                    passwordController.text
                 );
                 if (mounted) {
                   if (errorMessage == null) {
@@ -165,9 +165,9 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
                           trailing: email == 'felske.mirco@gmail.com'
                               ? null
                               : IconButton(
-                                  icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
-                                  onPressed: () => FirebaseService.removeAdminEmail(email),
-                                ),
+                            icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
+                            onPressed: () => FirebaseService.removeAdminEmail(email),
+                          ),
                         );
                       },
                     ),
@@ -238,28 +238,28 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
                 tooltip: 'Admin-Verwaltung',
               ),
             PopupMenuButton(
-              icon: _isTestDataMode 
+              icon: _isTestDataMode
                   ? const CircleAvatar(child: Icon(Icons.science))
                   : CircleAvatar(
-                      backgroundImage: _user?.photoURL != null ? NetworkImage(_user!.photoURL!) : null,
-                      child: _user?.photoURL == null ? const Icon(Icons.person) : null,
-                    ),
+                backgroundImage: _user?.photoURL != null ? NetworkImage(_user!.photoURL!) : null,
+                child: _user?.photoURL == null ? const Icon(Icons.person) : null,
+              ),
               itemBuilder: (context) => [
                 if (_user != null) PopupMenuItem(child: Text(_user!.email ?? '')),
-                if (_isAdmin) 
-                PopupMenuItem(
-                  onTap: () {
-                    setState(() {
-                      if (_isTestDataMode) {
-                        _isTestDataMode = false;
-                      } else {
-                        TestData.generate();
-                        _isTestDataMode = true;
-                      }
-                    });
-                  },
-                  child: Text(_isTestDataMode ? 'Lade Realdaten' : 'Lade Testdaten'),
-                ),
+                if (_isAdmin)
+                  PopupMenuItem(
+                    onTap: () {
+                      setState(() {
+                        if (_isTestDataMode) {
+                          _isTestDataMode = false;
+                        } else {
+                          TestData.generate();
+                          _isTestDataMode = true;
+                        }
+                      });
+                    },
+                    child: Text(_isTestDataMode ? 'Lade Realdaten' : 'Lade Testdaten'),
+                  ),
                 if (_user != null)
                   PopupMenuItem(
                     onTap: () => FirebaseService.signOut(),
@@ -303,9 +303,9 @@ class TestData {
     ];
 
     people = List.generate(names.length, (i) => Person(
-      id: 'test_p_$i',
-      name: names[i],
-      groups: [groups[i % groups.length]]
+        id: 'test_p_$i',
+        name: names[i],
+        groups: [groups[i % groups.length]]
     ));
 
     penalties = [
@@ -327,7 +327,7 @@ class TestData {
       for (int i = 0; i < numPenalties; i++) {
         final pen = penalties[random.nextInt(penalties.length)];
         final date = seasonStart.add(Duration(days: random.nextInt(totalDays)));
-        
+
         transactions.add(AppTransaction(
           id: 'test_t_${p.id}_$i',
           personId: p.id,
@@ -410,7 +410,7 @@ class _KassePageState extends State<KassePage> {
     } else {
       _loadSettings();
     }
-    
+
     // Live refresh ticker every second to catch calendar boundaries
     _refreshTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) setState(() {});
@@ -629,19 +629,19 @@ class _KassePageState extends State<KassePage> {
     return transactions
         .where((t) => t.personId == personId)
         .where((t) {
-          if (penaltyFilter != null) {
-            return t.description == penaltyFilter;
-          }
-          return true;
-        })
+      if (penaltyFilter != null) {
+        return t.description == penaltyFilter;
+      }
+      return true;
+    })
         .where((t) {
-          if (_selectedMonthStart != null) {
-            return t.date.year == _selectedMonthStart!.year && 
-                   t.date.month == _selectedMonthStart!.month;
-          }
-          return t.date.isAfter(_startDate.subtract(const Duration(seconds: 1))) &&
-                 t.date.isBefore(_endDate.add(const Duration(days: 1)));
-        })
+      if (_selectedMonthStart != null) {
+        return t.date.year == _selectedMonthStart!.year &&
+            t.date.month == _selectedMonthStart!.month;
+      }
+      return t.date.isAfter(_startDate.subtract(const Duration(seconds: 1))) &&
+          t.date.isBefore(_endDate.add(const Duration(days: 1)));
+    })
         .fold(0.0, (sum, t) => sum + t.amount);
   }
 
@@ -660,14 +660,14 @@ class _KassePageState extends State<KassePage> {
   int _calculateActiveGroupIndex(List<Map<String, dynamic>> activeGroups, Map<String, dynamic> settings) {
     int count = activeGroups.length;
     if (count <= 1) return 0;
-    
+
     final unit = settings['rotationUnit'] ?? 'days';
     final interval = settings['rotationInterval'] as int? ?? 1;
     final startGroup = settings['rotationStartGroupName'];
     final now = DateTime.now();
-    
+
     int rotationPoint = 0;
-    
+
     switch (unit) {
       case 'seconds':
         final startStr = settings['rotationStart'];
@@ -705,7 +705,7 @@ class _KassePageState extends State<KassePage> {
       final idx = activeGroups.indexWhere((g) => g['name'] == startGroup);
       if (idx != -1) offset = idx;
     }
-    
+
     return (rotationPoint + offset) % count;
   }
 
@@ -722,12 +722,12 @@ class _KassePageState extends State<KassePage> {
               ListTile(
                 title: const Text('Alle anzeigen'),
                 leading: Radio<String?>(
-                  value: null, 
-                  groupValue: _selectedPenaltyFilter, 
-                  onChanged: (v) {
-                    setState(() => _selectedPenaltyFilter = v);
-                    Navigator.pop(context);
-                  }
+                    value: null,
+                    groupValue: _selectedPenaltyFilter,
+                    onChanged: (v) {
+                      setState(() => _selectedPenaltyFilter = v);
+                      Navigator.pop(context);
+                    }
                 ),
                 onTap: () {
                   setState(() => _selectedPenaltyFilter = null);
@@ -737,12 +737,12 @@ class _KassePageState extends State<KassePage> {
               ...penalties.map((p) => ListTile(
                 title: Text(p.name),
                 leading: Radio<String?>(
-                  value: p.name, 
-                  groupValue: _selectedPenaltyFilter, 
-                  onChanged: (v) {
-                    setState(() => _selectedPenaltyFilter = v);
-                    Navigator.pop(context);
-                  }
+                    value: p.name,
+                    groupValue: _selectedPenaltyFilter,
+                    onChanged: (v) {
+                      setState(() => _selectedPenaltyFilter = v);
+                      Navigator.pop(context);
+                    }
                 ),
                 onTap: () {
                   setState(() => _selectedPenaltyFilter = p.name);
@@ -775,284 +775,284 @@ class _KassePageState extends State<KassePage> {
               stream: penaltyStream,
               builder: (context, penaltySnap) {
                 return StreamBuilder<Map<String, String>>(
-                  stream: paymentStream,
-                  builder: (context, paymentSnap) {
-                    return StreamBuilder<List<Map<String, dynamic>>>(
-                      stream: groupSettingsStream,
-                      builder: (context, groupSettingsSnap) {
-                        return StreamBuilder<Map<String, dynamic>>(
-                          stream: settingsStream,
-                          builder: (context, settingsSnap) {
-                            if (!peopleSnap.hasData || !transSnap.hasData || !penaltySnap.hasData || !paymentSnap.hasData || !groupSettingsSnap.hasData || !settingsSnap.hasData) {
-                              return const Center(child: CircularProgressIndicator());
-                            }
+                    stream: paymentStream,
+                    builder: (context, paymentSnap) {
+                      return StreamBuilder<List<Map<String, dynamic>>>(
+                          stream: groupSettingsStream,
+                          builder: (context, groupSettingsSnap) {
+                            return StreamBuilder<Map<String, dynamic>>(
+                                stream: settingsStream,
+                                builder: (context, settingsSnap) {
+                                  if (!peopleSnap.hasData || !transSnap.hasData || !penaltySnap.hasData || !paymentSnap.hasData || !groupSettingsSnap.hasData || !settingsSnap.hasData) {
+                                    return const Center(child: CircularProgressIndicator());
+                                  }
 
-                            final paymentInfo = paymentSnap.data!;
-                            final ibanPref = paymentInfo['preferred'] == 'iban';
-                            
-                            var filteredPeople = peopleSnap.data!
-                              ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-                            
-                            if (_searchQuery.isNotEmpty) {
-                              filteredPeople = filteredPeople.where((p) => p.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
-                            }
+                                  final paymentInfo = paymentSnap.data!;
+                                  final ibanPref = paymentInfo['preferred'] == 'iban';
 
-                            final seasonMonths = _getSeasonMonths();
-                            
-                            final activeGroups = groupSettingsSnap.data!
-                                .where((g) => g['showInKasse'] == true)
-                                .toList()..sort((a, b) => (a['order'] as int).compareTo(b['order'] as int));
-                            
-                            final activeIndex = _calculateActiveGroupIndex(activeGroups, settingsSnap.data!);
+                                  var filteredPeople = peopleSnap.data!
+                                    ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
-                            return Scaffold(
-                              body: Column(
-                                children: [
-                                  Card(
-                                    margin: const EdgeInsets.all(12),
-                                    color: const Color(0xFFE8F5E9),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(12),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  if (_searchQuery.isNotEmpty) {
+                                    filteredPeople = filteredPeople.where((p) => p.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+                                  }
+
+                                  final seasonMonths = _getSeasonMonths();
+
+                                  final activeGroups = groupSettingsSnap.data!
+                                      .where((g) => g['showInKasse'] == true)
+                                      .toList()..sort((a, b) => (a['order'] as int).compareTo(b['order'] as int));
+
+                                  final activeIndex = _calculateActiveGroupIndex(activeGroups, settingsSnap.data!);
+
+                                  return Scaffold(
+                                    body: Column(
+                                      children: [
+                                        Card(
+                                          margin: const EdgeInsets.all(12),
+                                          color: const Color(0xFFE8F5E9),
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(12),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                  children: [
+                                                    const Text('Zahlungsinformationen', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                                    Row(
+                                                      children: [
+                                                        if (widget.isAdmin)
+                                                          IconButton(
+                                                            icon: const Icon(Icons.history, size: 20),
+                                                            onPressed: () => _showGlobalHistory(context, transSnap.data!, peopleSnap.data!),
+                                                            tooltip: 'Alle Buchungen einsehen',
+                                                          ),
+                                                        if (widget.isAdmin)
+                                                          IconButton(icon: const Icon(Icons.edit, size: 20), onPressed: () => _showPaymentEditDialog(paymentInfo)),
+                                                      ],
+                                                    ),
+                                                  ],
+                                                ),
+                                                const Divider(),
+                                                const Text('Präferierte Zahlungsmethode:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                                if (ibanPref) ...[
+                                                  _buildInfoRow('IBAN', _formatIBAN(paymentInfo['iban'] ?? ''), isIban: true, isBold: true),
+                                                  if (paymentInfo['name'] != null)
+                                                    Padding(
+                                                      padding: const EdgeInsets.only(left: 4.0),
+                                                      child: Text('Inhaber: ${paymentInfo['name']}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                                    ),
+                                                ] else
+                                                  _buildInfoRow('E-Mail', paymentInfo['email'] ?? '', isBold: true),
+
+                                                const SizedBox(height: 8),
+                                                const Text('Sekundäre Zahlungsmethode:', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                                                if (!ibanPref) ...[
+                                                  _buildInfoRow('IBAN', _formatIBAN(paymentInfo['iban'] ?? ''), isIban: true),
+                                                  if (paymentInfo['name'] != null)
+                                                    Padding(
+                                                      padding: const EdgeInsets.only(left: 4.0),
+                                                      child: Text('Inhaber: ${paymentInfo['name']}', style: const TextStyle(fontSize: 11)),
+                                                    ),
+                                                ] else
+                                                  _buildInfoRow('E-Mail', paymentInfo['email'] ?? ''),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+
+                                        if (activeGroups.isNotEmpty)
+                                          Padding(
+                                            padding: const EdgeInsets.only(bottom: 8.0),
+                                            child: Column(
+                                              children: [
+                                                SingleChildScrollView(
+                                                  scrollDirection: Axis.horizontal,
+                                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                                  child: Row(
+                                                    children: activeGroups.asMap().entries.map((entry) {
+                                                      final idx = entry.key;
+                                                      final group = entry.value;
+                                                      final isActive = idx == activeIndex;
+                                                      return AnimatedOpacity(
+                                                        duration: const Duration(milliseconds: 800),
+                                                        opacity: isActive ? 1.0 : 0.3,
+                                                        child: Container(
+                                                          margin: const EdgeInsets.only(right: 8),
+                                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                                          decoration: BoxDecoration(
+                                                            color: isActive ? const Color(0xFFA5D6A7) : Colors.grey[200],
+                                                            borderRadius: BorderRadius.circular(25),
+                                                            border: Border.all(color: isActive ? Colors.green[700]! : Colors.grey[400]!),
+                                                            boxShadow: isActive ? [BoxShadow(color: Colors.green.withOpacity(0.3), blurRadius: 4, offset: const Offset(0, 2))] : null,
+                                                          ),
+                                                          child: Text(
+                                                            group['name'] as String,
+                                                            style: TextStyle(
+                                                              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                                                              color: isActive ? Colors.green[900] : Colors.grey[700],
+                                                              fontSize: isActive ? 14 : 13,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      );
+                                                    }).toList(),
+                                                  ),
+                                                ),
+                                                if (widget.isAdmin)
+                                                  Align(
+                                                    alignment: Alignment.centerRight,
+                                                    child: Padding(
+                                                      padding: const EdgeInsets.only(right: 12.0),
+                                                      child: IconButton(
+                                                        icon: const Icon(Icons.timer_outlined, size: 18, color: Colors.grey),
+                                                        onPressed: () => _showRotationSettings(
+                                                            settingsSnap.data!,
+                                                            activeGroups.map((g) => g['name'] as String).toList()
+                                                        ),
+                                                        tooltip: 'Rotation einstellen',
+                                                        visualDensity: VisualDensity.compact,
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                          color: const Color(0xFFF1F8E9),
+                                          child: Column(
                                             children: [
-                                              const Text('Zahlungsinformationen', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                                               Row(
                                                 children: [
+                                                  const Text('Spieler & Strafen', style: TextStyle(fontWeight: FontWeight.bold)),
+                                                  const Spacer(),
+                                                  AnimatedContainer(
+                                                    duration: const Duration(milliseconds: 300),
+                                                    width: _isSearchExpanded ? 200 : 40,
+                                                    height: 40,
+                                                    child: Row(
+                                                      mainAxisAlignment: MainAxisAlignment.end,
+                                                      children: [
+                                                        if (_isSearchExpanded)
+                                                          Expanded(
+                                                            child: TextField(
+                                                              autofocus: true,
+                                                              decoration: const InputDecoration(
+                                                                hintText: 'Suche...',
+                                                                isDense: true,
+                                                                contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                                                                border: OutlineInputBorder(),
+                                                                prefixIcon: Icon(Icons.search, size: 18),
+                                                              ),
+                                                              onChanged: (val) => setState(() => _searchQuery = val),
+                                                            ),
+                                                          ),
+                                                        IconButton(
+                                                          icon: Icon(_isSearchExpanded ? Icons.close : Icons.search,
+                                                              color: _searchQuery.isNotEmpty ? Colors.green : null),
+                                                          onPressed: () {
+                                                            setState(() {
+                                                              _isSearchExpanded = !_isSearchExpanded;
+                                                              if (!_isSearchExpanded) _searchQuery = '';
+                                                            });
+                                                          },
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  IconButton(
+                                                    icon: Icon(Icons.filter_list, color: _selectedPenaltyFilter != null ? Colors.green : null),
+                                                    onPressed: () => _showFilterDialog(penaltySnap.data!),
+                                                    tooltip: 'Nach Strafe filtern',
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 8),
+                                              Row(
+                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                children: [
+                                                  Text(
+                                                    'Saison: ${DateFormat('dd.MM.yy').format(_startDate)} - ${DateFormat('dd.MM.yy').format(_endDate)}',
+                                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                                  ),
                                                   if (widget.isAdmin)
                                                     IconButton(
-                                                      icon: const Icon(Icons.history, size: 20),
-                                                      onPressed: () => _showGlobalHistory(context, transSnap.data!, peopleSnap.data!),
-                                                      tooltip: 'Alle Buchungen einsehen',
+                                                      icon: const Icon(Icons.calendar_month),
+                                                      onPressed: _showSeasonSettings,
                                                     ),
-                                                  if (widget.isAdmin)
-                                                    IconButton(icon: const Icon(Icons.edit, size: 20), onPressed: () => _showPaymentEditDialog(paymentInfo)),
                                                 ],
+                                              ),
+                                              SingleChildScrollView(
+                                                scrollDirection: Axis.horizontal,
+                                                child: Row(
+                                                  children: [
+                                                    FilterChip(
+                                                      label: const Text('Gesamt'),
+                                                      selected: _selectedMonthStart == null,
+                                                      onSelected: (val) => setState(() => _selectedMonthStart = null),
+                                                      selectedColor: const Color(0xFFA5D6A7),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    ...seasonMonths.map((m) => Padding(
+                                                      padding: const EdgeInsets.only(right: 8),
+                                                      child: FilterChip(
+                                                        label: Text(DateFormat('MMM yy').format(m)),
+                                                        selected: _selectedMonthStart?.year == m.year && _selectedMonthStart?.month == m.month,
+                                                        onSelected: (val) => setState(() => _selectedMonthStart = val ? m : null),
+                                                        selectedColor: const Color(0xFFA5D6A7),
+                                                      ),
+                                                    )),
+                                                  ],
+                                                ),
                                               ),
                                             ],
                                           ),
-                                          const Divider(),
-                                          const Text('Präferierte Zahlungsmethode:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                          if (ibanPref) ...[
-                                            _buildInfoRow('IBAN', _formatIBAN(paymentInfo['iban'] ?? ''), isIban: true, isBold: true),
-                                            if (paymentInfo['name'] != null)
-                                              Padding(
-                                                padding: const EdgeInsets.only(left: 4.0),
-                                                child: Text('Inhaber: ${paymentInfo['name']}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                                              ),
-                                          ] else
-                                            _buildInfoRow('E-Mail', paymentInfo['email'] ?? '', isBold: true),
-                                          
-                                          const SizedBox(height: 8),
-                                          const Text('Sekundäre Zahlungsmethode:', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                                          if (!ibanPref) ...[
-                                            _buildInfoRow('IBAN', _formatIBAN(paymentInfo['iban'] ?? ''), isIban: true),
-                                            if (paymentInfo['name'] != null)
-                                              Padding(
-                                                padding: const EdgeInsets.only(left: 4.0),
-                                                child: Text('Inhaber: ${paymentInfo['name']}', style: const TextStyle(fontSize: 11)),
-                                              ),
-                                          ] else
-                                            _buildInfoRow('E-Mail', paymentInfo['email'] ?? ''),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  
-                                  if (activeGroups.isNotEmpty)
-                                    Padding(
-                                      padding: const EdgeInsets.only(bottom: 8.0),
-                                      child: Column(
-                                        children: [
-                                          SingleChildScrollView(
-                                            scrollDirection: Axis.horizontal,
-                                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                                            child: Row(
-                                              children: activeGroups.asMap().entries.map((entry) {
-                                                final idx = entry.key;
-                                                final group = entry.value;
-                                                final isActive = idx == activeIndex;
-                                                return AnimatedOpacity(
-                                                  duration: const Duration(milliseconds: 800),
-                                                  opacity: isActive ? 1.0 : 0.3,
-                                                  child: Container(
-                                                    margin: const EdgeInsets.only(right: 8),
-                                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                                    decoration: BoxDecoration(
-                                                      color: isActive ? const Color(0xFFA5D6A7) : Colors.grey[200],
-                                                      borderRadius: BorderRadius.circular(25),
-                                                      border: Border.all(color: isActive ? Colors.green[700]! : Colors.grey[400]!),
-                                                      boxShadow: isActive ? [BoxShadow(color: Colors.green.withOpacity(0.3), blurRadius: 4, offset: const Offset(0, 2))] : null,
-                                                    ),
-                                                    child: Text(
-                                                      group['name'] as String,
-                                                      style: TextStyle(
-                                                        fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                                                        color: isActive ? Colors.green[900] : Colors.grey[700],
-                                                        fontSize: isActive ? 14 : 13,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                );
-                                              }).toList(),
-                                            ),
-                                          ),
-                                          if (widget.isAdmin)
-                                            Align(
-                                              alignment: Alignment.centerRight,
-                                              child: Padding(
-                                                padding: const EdgeInsets.only(right: 12.0),
-                                                child: IconButton(
-                                                  icon: const Icon(Icons.timer_outlined, size: 18, color: Colors.grey),
-                                                  onPressed: () => _showRotationSettings(
-                                                    settingsSnap.data!, 
-                                                    activeGroups.map((g) => g['name'] as String).toList()
-                                                  ),
-                                                  tooltip: 'Rotation einstellen',
-                                                  visualDensity: VisualDensity.compact,
-                                                ),
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    color: const Color(0xFFF1F8E9),
-                                    child: Column(
-                                      children: [
-                                        Row(
-                                          children: [
-                                            const Text('Spieler & Strafen', style: TextStyle(fontWeight: FontWeight.bold)),
-                                            const Spacer(),
-                                            AnimatedContainer(
-                                              duration: const Duration(milliseconds: 300),
-                                              width: _isSearchExpanded ? 200 : 40,
-                                              height: 40,
-                                              child: Row(
-                                                mainAxisAlignment: MainAxisAlignment.end,
-                                                children: [
-                                                  if (_isSearchExpanded)
-                                                    Expanded(
-                                                      child: TextField(
-                                                        autofocus: true,
-                                                        decoration: const InputDecoration(
-                                                          hintText: 'Suche...',
-                                                          isDense: true,
-                                                          contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                                                          border: OutlineInputBorder(),
-                                                          prefixIcon: Icon(Icons.search, size: 18),
-                                                        ),
-                                                        onChanged: (val) => setState(() => _searchQuery = val),
-                                                      ),
-                                                    ),
-                                                  IconButton(
-                                                    icon: Icon(_isSearchExpanded ? Icons.close : Icons.search, 
-                                                         color: _searchQuery.isNotEmpty ? Colors.green : null),
-                                                    onPressed: () {
-                                                      setState(() {
-                                                        _isSearchExpanded = !_isSearchExpanded;
-                                                        if (!_isSearchExpanded) _searchQuery = '';
-                                                      });
-                                                    },
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            IconButton(
-                                              icon: Icon(Icons.filter_list, color: _selectedPenaltyFilter != null ? Colors.green : null),
-                                              onPressed: () => _showFilterDialog(penaltySnap.data!),
-                                              tooltip: 'Nach Strafe filtern',
-                                            ),
-                                          ],
                                         ),
-                                        const SizedBox(height: 8),
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Text(
-                                              'Saison: ${DateFormat('dd.MM.yy').format(_startDate)} - ${DateFormat('dd.MM.yy').format(_endDate)}',
-                                              style: const TextStyle(fontWeight: FontWeight.bold),
-                                            ),
-                                            if (widget.isAdmin)
-                                              IconButton(
-                                                icon: const Icon(Icons.calendar_month),
-                                                onPressed: _showSeasonSettings,
-                                              ),
-                                          ],
-                                        ),
-                                        SingleChildScrollView(
-                                          scrollDirection: Axis.horizontal,
-                                          child: Row(
-                                            children: [
-                                              FilterChip(
-                                                label: const Text('Gesamt'),
-                                                selected: _selectedMonthStart == null,
-                                                onSelected: (val) => setState(() => _selectedMonthStart = null),
-                                                selectedColor: const Color(0xFFA5D6A7),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              ...seasonMonths.map((m) => Padding(
-                                                padding: const EdgeInsets.only(right: 8),
-                                                child: FilterChip(
-                                                  label: Text(DateFormat('MMM yy').format(m)),
-                                                  selected: _selectedMonthStart?.year == m.year && _selectedMonthStart?.month == m.month,
-                                                  onSelected: (val) => setState(() => _selectedMonthStart = val ? m : null),
-                                                  selectedColor: const Color(0xFFA5D6A7),
+                                        Expanded(
+                                          child: ListView.builder(
+                                            itemCount: filteredPeople.length,
+                                            itemBuilder: (context, index) {
+                                              final p = filteredPeople[index];
+                                              final balance = _calculateBalance(p.id, transSnap.data!, penaltyFilter: _selectedPenaltyFilter);
+                                              return InkWell(
+                                                onTap: () => _showHistory(context, p, transSnap.data!),
+                                                child: ListTile(
+                                                  leading: CircleAvatar(
+                                                    backgroundColor: const Color(0xFFA5D6A7),
+                                                    child: Text(p.name[0], style: const TextStyle(color: Colors.white)),
+                                                  ),
+                                                  title: _buildHighlightedText(p.name, _searchQuery),
+                                                  subtitle: Text(p.groups.join(', ')),
+                                                  trailing: Text(
+                                                    '${balance.toStringAsFixed(2).replaceAll('.', ',')} €',
+                                                    style: TextStyle(
+                                                      fontWeight: FontWeight.bold,
+                                                      color: balance < 0 ? Colors.red : (balance > 0 ? Colors.green : Colors.black),
+                                                    ),
+                                                  ),
                                                 ),
-                                              )),
-                                            ],
+                                              );
+                                            },
                                           ),
                                         ),
                                       ],
                                     ),
-                                  ),
-                                  Expanded(
-                                    child: ListView.builder(
-                                      itemCount: filteredPeople.length,
-                                      itemBuilder: (context, index) {
-                                        final p = filteredPeople[index];
-                                        final balance = _calculateBalance(p.id, transSnap.data!, penaltyFilter: _selectedPenaltyFilter);
-                                        return InkWell(
-                                          onTap: () => _showHistory(context, p, transSnap.data!),
-                                          child: ListTile(
-                                            leading: CircleAvatar(
-                                              backgroundColor: const Color(0xFFA5D6A7),
-                                              child: Text(p.name[0], style: const TextStyle(color: Colors.white)),
-                                            ),
-                                            title: _buildHighlightedText(p.name, _searchQuery),
-                                            subtitle: Text(p.groups.join(', ')),
-                                            trailing: Text(
-                                              '${balance.toStringAsFixed(2).replaceAll('.', ',')} €',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                color: balance < 0 ? Colors.red : (balance > 0 ? Colors.green : Colors.black),
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              floatingActionButton: widget.isAdmin
-                                  ? FloatingActionButton(
+                                    floatingActionButton: widget.isAdmin
+                                        ? FloatingActionButton(
                                       onPressed: () => _addTransaction(context, peopleSnap.data!, penaltySnap.data!, transSnap.data!, []),
                                       backgroundColor: const Color(0xFF4CAF50),
                                       child: const Icon(Icons.add, color: Colors.white),
                                     )
-                                  : null,
+                                        : null,
+                                  );
+                                }
                             );
                           }
-                        );
-                      }
-                    );
-                  }
+                      );
+                    }
                 );
               },
             );
@@ -1066,7 +1066,7 @@ class _KassePageState extends State<KassePage> {
     if (query.isEmpty) return Text(text);
     final matches = query.toLowerCase();
     final lowerText = text.toLowerCase();
-    
+
     List<TextSpan> spans = [];
     int start = 0; int indexOfMatch;
 
@@ -1080,7 +1080,7 @@ class _KassePageState extends State<KassePage> {
       ));
       start = indexOfMatch + query.length;
     }
-    
+
     if (start < text.length) {
       spans.add(TextSpan(text: text.substring(start)));
     }
@@ -1123,7 +1123,7 @@ class _KassePageState extends State<KassePage> {
           final modeTag = isGroupMode ? 'Gruppe' : 'Einzeln';
           final modeFiltered = penalties.where((p) => p.tags.contains(modeTag)).toList();
           final filtered = selectedTag == null ? modeFiltered : modeFiltered.where((p) => p.tags.contains(selectedTag)).toList();
-          
+
           final allTags = modeFiltered.expand((p) => p.tags)
               .toSet()
               .where((t) => t != 'Gruppe' && t != 'Einzeln')
@@ -1172,19 +1172,19 @@ class _KassePageState extends State<KassePage> {
                       Expanded(
                         child: isGroupMode
                             ? DropdownButton<String>(
-                                value: selectedGroup,
-                                hint: const Text('Gruppe'),
-                                isExpanded: true,
-                                onChanged: (val) => setDialogState(() => selectedGroup = val),
-                                items: groups.map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
-                              )
+                          value: selectedGroup,
+                          hint: const Text('Gruppe'),
+                          isExpanded: true,
+                          onChanged: (val) => setDialogState(() => selectedGroup = val),
+                          items: groups.map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
+                        )
                             : DropdownButton<Person>(
-                                value: selectedPerson,
-                                hint: const Text('Person'),
-                                isExpanded: true,
-                                onChanged: (val) => setDialogState(() => selectedPerson = val),
-                                items: people.map((p) => DropdownMenuItem(value: p, child: Text(p.name))).toList(),
-                              ),
+                          value: selectedPerson,
+                          hint: const Text('Person'),
+                          isExpanded: true,
+                          onChanged: (val) => setDialogState(() => selectedPerson = val),
+                          items: people.map((p) => DropdownMenuItem(value: p, child: Text(p.name))).toList(),
+                        ),
                       ),
                       IconButton(
                         icon: const Icon(Icons.calendar_today),
@@ -1240,51 +1240,51 @@ class _KassePageState extends State<KassePage> {
                 onPressed: (targetPeople.isEmpty || selectedPenalty == null)
                     ? null
                     : () async {
-                        List<Person> alreadyBooked = [];
-                        for (var p in targetPeople) {
-                          bool exists = existingTransactions.any((t) => 
-                            t.personId == p.id && 
-                            t.description == selectedPenalty!.name &&
-                            t.date.year == selectedDate.year &&
-                            t.date.month == selectedDate.month &&
-                            t.date.day == selectedDate.day);
-                          if (exists) alreadyBooked.add(p);
-                        }
+                  List<Person> alreadyBooked = [];
+                  for (var p in targetPeople) {
+                    bool exists = existingTransactions.any((t) =>
+                    t.personId == p.id &&
+                        t.description == selectedPenalty!.name &&
+                        t.date.year == selectedDate.year &&
+                        t.date.month == selectedDate.month &&
+                        t.date.day == selectedDate.day);
+                    if (exists) alreadyBooked.add(p);
+                  }
 
-                        if (alreadyBooked.isNotEmpty) {
-                          final confirm = await showDialog<bool>(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text('Bereits gebucht?'),
-                              content: Text('Für ${alreadyBooked.length} Personen wurde diese Strafe am gewählten Tag bereits erfasst. Trotzdem buchen?'),
-                              actions: [
-                                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Nein')),
-                                TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Ja, buchen')),
-                              ],
-                            ),
-                          );
-                          if (confirm != true) return;
-                        }
+                  if (alreadyBooked.isNotEmpty) {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Bereits gebucht?'),
+                        content: Text('Für ${alreadyBooked.length} Personen wurde diese Strafe am gewählten Tag bereits erfasst. Trotzdem buchen?'),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Nein')),
+                          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Ja, buchen')),
+                        ],
+                      ),
+                    );
+                    if (confirm != true) return;
+                  }
 
-                        if (mounted) Navigator.pop(context);
-                        for (var person in targetPeople) {
-                          for (int i = 0; i < multiplier; i++) {
-                            final t = AppTransaction(
-                              id: '${DateTime.now().millisecondsSinceEpoch}_${person.id}_$i',
-                              personId: person.id,
-                              description: selectedPenalty!.name,
-                              amount: -selectedPenalty!.amount,
-                              date: selectedDate,
-                            );
-                            if (!widget.isTestDataMode) {
-                              await FirebaseService.addTransaction(t);
-                            } else {
-                              TestData.transactions.add(t);
-                            }
-                          }
-                        }
-                        setState(() {});
-                      },
+                  if (mounted) Navigator.pop(context);
+                  for (var person in targetPeople) {
+                    for (int i = 0; i < multiplier; i++) {
+                      final t = AppTransaction(
+                        id: '${DateTime.now().millisecondsSinceEpoch}_${person.id}_$i',
+                        personId: person.id,
+                        description: selectedPenalty!.name,
+                        amount: -selectedPenalty!.amount,
+                        date: selectedDate,
+                      );
+                      if (!widget.isTestDataMode) {
+                        await FirebaseService.addTransaction(t);
+                      } else {
+                        TestData.transactions.add(t);
+                      }
+                    }
+                  }
+                  setState(() {});
+                },
                 child: Text(isGroupMode ? 'Gruppe buchen' : 'Buchen'),
               ),
             ],
@@ -1336,7 +1336,7 @@ class _KassePageState extends State<KassePage> {
 
   void _showHistory(BuildContext context, Person person, List<AppTransaction> transactions) {
     var history = transactions.where((t) => t.personId == person.id).toList();
-    
+
     if (_selectedPenaltyFilter != null) {
       history = history.where((t) => t.description == _selectedPenaltyFilter).toList();
     }
@@ -1357,38 +1357,38 @@ class _KassePageState extends State<KassePage> {
           child: history.isEmpty
               ? const Text('Keine Einträge für diesen Filter.')
               : ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: history.length,
-                  itemBuilder: (context, index) {
-                    final t = history[index];
-                    return ListTile(
-                      title: Text(t.description),
-                      subtitle: Text(DateFormat('dd.MM.yy').format(t.date)),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text('${t.amount.toStringAsFixed(2)} €', style: TextStyle(color: t.amount < 0 ? Colors.red : Colors.green)),
-                          if (widget.isAdmin)
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                              onPressed: () async {
-                                final confirm = await _showDeleteConfirm(context);
-                                if (confirm == true) {
-                                  if (!widget.isTestDataMode) {
-                                    await FirebaseService.deleteTransaction(t.id);
-                                  } else {
-                                    TestData.transactions.removeWhere((item) => item.id == t.id);
-                                    setState(() {});
-                                  }
-                                  if (mounted) Navigator.pop(context);
-                                }
-                              },
-                            ),
-                        ],
+            shrinkWrap: true,
+            itemCount: history.length,
+            itemBuilder: (context, index) {
+              final t = history[index];
+              return ListTile(
+                title: Text(t.description),
+                subtitle: Text(DateFormat('dd.MM.yy').format(t.date)),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('${t.amount.toStringAsFixed(2)} €', style: TextStyle(color: t.amount < 0 ? Colors.red : Colors.green)),
+                    if (widget.isAdmin)
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                        onPressed: () async {
+                          final confirm = await _showDeleteConfirm(context);
+                          if (confirm == true) {
+                            if (!widget.isTestDataMode) {
+                              await FirebaseService.deleteTransaction(t.id);
+                            } else {
+                              TestData.transactions.removeWhere((item) => item.id == t.id);
+                              setState(() {});
+                            }
+                            if (mounted) Navigator.pop(context);
+                          }
+                        },
                       ),
-                    );
-                  },
+                  ],
                 ),
+              );
+            },
+          ),
         ),
         actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Schließen'))],
       ),
@@ -1405,38 +1405,38 @@ class _KassePageState extends State<KassePage> {
           child: transactions.isEmpty
               ? const Text('Bisher keine Buchungen vorhanden.')
               : ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: transactions.length,
-                  itemBuilder: (context, index) {
-                    final t = transactions[index];
-                    final person = people.firstWhere((p) => p.id == t.personId, orElse: () => Person(id: '?', name: 'Gelöschter Spieler', groups: []));
-                    return ListTile(
-                      title: Text(t.description),
-                      subtitle: Text('${person.name} • ${DateFormat('dd.MM.yy').format(t.date)}'),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text('${t.amount.toStringAsFixed(2)} €', style: TextStyle(color: t.amount < 0 ? Colors.red : Colors.green)),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                            onPressed: () async {
-                              final confirm = await _showDeleteConfirm(context);
-                              if (confirm == true) {
-                                if (!widget.isTestDataMode) {
-                                  await FirebaseService.deleteTransaction(t.id);
-                                } else {
-                                  TestData.transactions.removeWhere((item) => item.id == t.id);
-                                  setState(() {});
-                                }
-                                if (mounted) Navigator.pop(context);
-                              }
-                            },
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+            shrinkWrap: true,
+            itemCount: transactions.length,
+            itemBuilder: (context, index) {
+              final t = transactions[index];
+              final person = people.firstWhere((p) => p.id == t.personId, orElse: () => Person(id: '?', name: 'Gelöschter Spieler', groups: []));
+              return ListTile(
+                title: Text(t.description),
+                subtitle: Text('${person.name} • ${DateFormat('dd.MM.yy').format(t.date)}'),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('${t.amount.toStringAsFixed(2)} €', style: TextStyle(color: t.amount < 0 ? Colors.red : Colors.green)),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                      onPressed: () async {
+                        final confirm = await _showDeleteConfirm(context);
+                        if (confirm == true) {
+                          if (!widget.isTestDataMode) {
+                            await FirebaseService.deleteTransaction(t.id);
+                          } else {
+                            TestData.transactions.removeWhere((item) => item.id == t.id);
+                            setState(() {});
+                          }
+                          if (mounted) Navigator.pop(context);
+                        }
+                      },
+                    ),
+                  ],
                 ),
+              );
+            },
+          ),
         ),
         actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Schließen'))],
       ),
@@ -1606,9 +1606,9 @@ class _PersonenListPageState extends State<PersonenListPage> {
               onPressed: () async {
                 if (nameController.text.isNotEmpty) {
                   final p = Person(
-                    id: person?.id ?? DateTime.now().millisecondsSinceEpoch.toString(), 
-                    name: nameController.text.trim(), 
-                    groups: selectedGroups
+                      id: person?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+                      name: nameController.text.trim(),
+                      groups: selectedGroups
                   );
                   if (!widget.isTestDataMode) {
                     await FirebaseService.addPerson(p);
@@ -1662,50 +1662,50 @@ class _PersonenListPageState extends State<PersonenListPage> {
       stream: peopleStream,
       builder: (context, peopleSnap) {
         return StreamBuilder<List<String>>(
-          stream: groupsStream,
-          builder: (context, groupsSnap) {
-            return StreamBuilder<List<Map<String, dynamic>>>(
-              stream: groupSettingsStream,
-              builder: (context, groupSettingsSnap) {
-                if (!peopleSnap.hasData || !groupsSnap.hasData || !groupSettingsSnap.hasData) return const Center(child: CircularProgressIndicator());
-                final people = peopleSnap.data!..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-                final groups = groupsSnap.data!;
-                final groupSettings = groupSettingsSnap.data!;
+            stream: groupsStream,
+            builder: (context, groupsSnap) {
+              return StreamBuilder<List<Map<String, dynamic>>>(
+                  stream: groupSettingsStream,
+                  builder: (context, groupSettingsSnap) {
+                    if (!peopleSnap.hasData || !groupsSnap.hasData || !groupSettingsSnap.hasData) return const Center(child: CircularProgressIndicator());
+                    final people = peopleSnap.data!..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+                    final groups = groupsSnap.data!;
+                    final groupSettings = groupSettingsSnap.data!;
 
-                return Scaffold(
-                  appBar: widget.isAdmin ? AppBar(
-                    toolbarHeight: 40,
-                    backgroundColor: Colors.white,
-                    title: TextButton.icon(
-                      onPressed: () => _manageGroups(context, groups, groupSettings),
-                      icon: const Icon(Icons.edit_note, size: 18),
-                      label: const Text('Gruppen verwalten', style: TextStyle(fontSize: 12)),
-                    ),
-                  ) : null,
-                  body: Row(
-                    children: [
-                      Expanded(
-                        flex: 1,
-                        child: Container(
-                          color: Colors.grey[50],
-                          child: Column(
-                            children: [
-                              const Padding(
-                                padding: EdgeInsets.all(12.0),
-                                child: Text('Alle Personen', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                              ),
-                              Expanded(
-                                child: ListView.builder(
-                                  itemCount: people.length,
-                                  itemBuilder: (context, index) {
-                                    final p = people[index];
-                                    return ListTile(
-                                      title: Text(p.name),
-                                      subtitle: Text(p.groups.isEmpty ? 'Keine Gruppe' : p.groups.join(', ')),
-                                      onTap: widget.isAdmin ? () => _showPersonDialog(context, groups, person: p) : null,
-                                      trailing: widget.isAdmin 
-                                          ? IconButton(
-                                              icon: const Icon(Icons.delete, color: Colors.red), 
+                    return Scaffold(
+                      appBar: widget.isAdmin ? AppBar(
+                        toolbarHeight: 40,
+                        backgroundColor: Colors.white,
+                        title: TextButton.icon(
+                          onPressed: () => _manageGroups(context, groups, groupSettings),
+                          icon: const Icon(Icons.edit_note, size: 18),
+                          label: const Text('Gruppen verwalten', style: TextStyle(fontSize: 12)),
+                        ),
+                      ) : null,
+                      body: Row(
+                        children: [
+                          Expanded(
+                            flex: 1,
+                            child: Container(
+                              color: Colors.grey[50],
+                              child: Column(
+                                children: [
+                                  const Padding(
+                                    padding: EdgeInsets.all(12.0),
+                                    child: Text('Alle Personen', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                  ),
+                                  Expanded(
+                                    child: ListView.builder(
+                                      itemCount: people.length,
+                                      itemBuilder: (context, index) {
+                                        final p = people[index];
+                                        return ListTile(
+                                          title: Text(p.name),
+                                          subtitle: Text(p.groups.isEmpty ? 'Keine Gruppe' : p.groups.join(', ')),
+                                          onTap: widget.isAdmin ? () => _showPersonDialog(context, groups, person: p) : null,
+                                          trailing: widget.isAdmin
+                                              ? IconButton(
+                                              icon: const Icon(Icons.delete, color: Colors.red),
                                               onPressed: () => _confirmDelete(context, () {
                                                 if (!widget.isTestDataMode) {
                                                   FirebaseService.deletePerson(p.id);
@@ -1714,77 +1714,77 @@ class _PersonenListPageState extends State<PersonenListPage> {
                                                   setState(() {});
                                                 }
                                               })
-                                            ) 
-                                          : null,
-                                    );
-                                  },
-                                ),
+                                          )
+                                              : null,
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
-                        ),
-                      ),
-                      const VerticalDivider(width: 1),
-                      Expanded(
-                        flex: 1,
-                        child: Column(
-                          children: [
-                            const Padding(
-                              padding: EdgeInsets.all(12.0),
-                              child: Text('Gruppen-Übersicht', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                            ),
-                            Expanded(
-                              child: ListView(
-                                children: groups.map((group) {
-                                  final groupPeople = people.where((p) => p.groups.contains(group)).toList();
-                                  return Container(
-                                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      border: Border.all(color: Colors.grey[200]!),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(group, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2E7D32))),
-                                        const SizedBox(height: 8),
-                                        Wrap(
-                                          spacing: 6,
-                                          runSpacing: 6,
-                                          children: groupPeople.map((p) => Chip(
-                                            label: Text(p.name, style: const TextStyle(fontSize: 12)),
-                                            backgroundColor: const Color(0xFFF1F8E9),
-                                            side: BorderSide.none,
-                                            padding: EdgeInsets.zero,
-                                            visualDensity: VisualDensity.compact,
-                                          )).toList(),
+                          const VerticalDivider(width: 1),
+                          Expanded(
+                            flex: 1,
+                            child: Column(
+                              children: [
+                                const Padding(
+                                  padding: EdgeInsets.all(12.0),
+                                  child: Text('Gruppen-Übersicht', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                ),
+                                Expanded(
+                                  child: ListView(
+                                    children: groups.map((group) {
+                                      final groupPeople = people.where((p) => p.groups.contains(group)).toList();
+                                      return Container(
+                                        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          border: Border.all(color: Colors.grey[200]!),
+                                          borderRadius: BorderRadius.circular(12),
                                         ),
-                                        if (groupPeople.isEmpty)
-                                          const Text('Keine Personen', style: TextStyle(color: Colors.grey, fontSize: 12, fontStyle: FontStyle.italic)),
-                                      ],
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(group, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2E7D32))),
+                                            const SizedBox(height: 8),
+                                            Wrap(
+                                              spacing: 6,
+                                              runSpacing: 6,
+                                              children: groupPeople.map((p) => Chip(
+                                                label: Text(p.name, style: const TextStyle(fontSize: 12)),
+                                                backgroundColor: const Color(0xFFF1F8E9),
+                                                side: BorderSide.none,
+                                                padding: EdgeInsets.zero,
+                                                visualDensity: VisualDensity.compact,
+                                              )).toList(),
+                                            ),
+                                            if (groupPeople.isEmpty)
+                                              const Text('Keine Personen', style: TextStyle(color: Colors.grey, fontSize: 12, fontStyle: FontStyle.italic)),
+                                          ],
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  floatingActionButton: widget.isAdmin
-                      ? FloatingActionButton(
-                          onPressed: () => _showPersonDialog(context, groups),
-                          backgroundColor: const Color(0xFF4CAF50),
-                          child: const Icon(Icons.add, color: Colors.white),
-                        )
-                      : null,
-                );
-              }
-            );
-          }
+                      floatingActionButton: widget.isAdmin
+                          ? FloatingActionButton(
+                        onPressed: () => _showPersonDialog(context, groups),
+                        backgroundColor: const Color(0xFF4CAF50),
+                        child: const Icon(Icons.add, color: Colors.white),
+                      )
+                          : null,
+                    );
+                  }
+              );
+            }
         );
       },
     );
@@ -1816,12 +1816,12 @@ class _StrafenListPageState extends State<StrafenListPage> {
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
-              children: [
+            children: [
               TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Name')),
               TextField(controller: amountC, decoration: const InputDecoration(labelText: 'Betrag (€)'), keyboardType: TextInputType.number),
               TextField(controller: tagsC, decoration: const InputDecoration(labelText: 'Tags (komma-getrennt)')),
               TextField(
-                controller: descC, 
+                controller: descC,
                 decoration: const InputDecoration(labelText: 'Erklärung', hintText: 'Kurze Beschreibung...'),
                 maxLines: 2,
               ),
@@ -1928,15 +1928,15 @@ class _StrafenListPageState extends State<StrafenListPage> {
                     ],
                   ),
                   trailing: widget.isAdmin ? IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.red), 
-                    onPressed: () => _confirmDelete(context, () {
-                      if (!widget.isTestDataMode) {
-                        FirebaseService.deletePenalty(p.id);
-                      } else {
-                        TestData.penalties.removeWhere((item) => item.id == p.id);
-                        setState(() {});
-                      }
-                    })
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      onPressed: () => _confirmDelete(context, () {
+                        if (!widget.isTestDataMode) {
+                          FirebaseService.deletePenalty(p.id);
+                        } else {
+                          TestData.penalties.removeWhere((item) => item.id == p.id);
+                          setState(() {});
+                        }
+                      })
                   ) : null,
                 ),
               );
@@ -1944,10 +1944,10 @@ class _StrafenListPageState extends State<StrafenListPage> {
           ),
           floatingActionButton: widget.isAdmin
               ? FloatingActionButton(
-                  onPressed: () => _showPenaltyDialog(context),
-                  backgroundColor: const Color(0xFF4CAF50),
-                  child: const Icon(Icons.add, color: Colors.white),
-                )
+            onPressed: () => _showPenaltyDialog(context),
+            backgroundColor: const Color(0xFF4CAF50),
+            child: const Icon(Icons.add, color: Colors.white),
+          )
               : null,
         );
       },
