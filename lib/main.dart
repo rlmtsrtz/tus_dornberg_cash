@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:math';
+import 'dart:async';
 import 'models/person.dart';
 import 'models/penalty.dart';
 import 'models/app_transaction.dart';
@@ -396,6 +397,7 @@ class _KassePageState extends State<KassePage> {
   DateTime? _realEndDate;
 
   bool _isSearchExpanded = false;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
@@ -408,6 +410,17 @@ class _KassePageState extends State<KassePage> {
     } else {
       _loadSettings();
     }
+    
+    // Live refresh ticker every second to catch calendar boundaries
+    _refreshTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -489,17 +502,18 @@ class _KassePageState extends State<KassePage> {
                 isExpanded: true,
                 onChanged: (val) => setDialogState(() => unit = val!),
                 items: const [
-                  DropdownMenuItem(value: 'hours', child: Text('Alle X Stunden')),
+                  DropdownMenuItem(value: 'minutes', child: Text('Minütlich (Start neue Min.)')),
+                  DropdownMenuItem(value: 'hours', child: Text('Stündlich (Start neue Std.)')),
                   DropdownMenuItem(value: 'days', child: Text('Täglich (00:00 Uhr)')),
                   DropdownMenuItem(value: 'weeks', child: Text('Wöchentlich (Montag)')),
                   DropdownMenuItem(value: 'months', child: Text('Monatlich (1. des Monats)')),
                   DropdownMenuItem(value: 'years', child: Text('Jährlich (1. Januar)')),
                 ],
               ),
-              if (unit == 'hours')
+              if (unit == 'minutes' || unit == 'hours')
                 TextField(
                   controller: controller,
-                  decoration: const InputDecoration(labelText: 'Anzahl Stunden'),
+                  decoration: InputDecoration(labelText: unit == 'minutes' ? 'Anzahl Minuten' : 'Anzahl Stunden'),
                   keyboardType: TextInputType.number,
                 ),
             ],
@@ -649,25 +663,24 @@ class _KassePageState extends State<KassePage> {
           rotationPoint = (now.difference(start).inSeconds / interval).floor();
         }
         break;
+      case 'minutes':
+        // Total minutes since epoch
+        final totalMinutes = (now.millisecondsSinceEpoch / (1000 * 60)).floor();
+        rotationPoint = (totalMinutes / interval).floor();
+        break;
       case 'hours':
-        final startStr = settings['rotationStart'];
-        if (startStr != null) {
-          final start = DateTime.parse(startStr as String);
-          rotationPoint = (now.difference(start).inHours / interval).floor();
-        }
+        final totalHours = (now.millisecondsSinceEpoch / (1000 * 60 * 60)).floor();
+        rotationPoint = (totalHours / interval).floor();
         break;
       case 'days':
-        // Days since epoch (starts at 00:00)
         rotationPoint = (now.millisecondsSinceEpoch / (1000 * 60 * 60 * 24)).floor();
         break;
       case 'weeks':
-        // Weeks since epoch (Monday alignment)
-        // Adjust epoch (Thursday) to Monday: subtract 3 days
-        final mondayEpoch = now.subtract(const Duration(days: 3));
-        rotationPoint = (mondayEpoch.millisecondsSinceEpoch / (1000 * 60 * 60 * 24 * 7)).floor();
+        // Adjust epoch to Monday: epoch (Thursday) - 3 days
+        final mondayAdjustedEpoch = now.subtract(const Duration(days: 3));
+        rotationPoint = (mondayAdjustedEpoch.millisecondsSinceEpoch / (1000 * 60 * 60 * 24 * 7)).floor();
         break;
       case 'months':
-        // Absolute months since year 0
         rotationPoint = (now.year * 12) + now.month;
         break;
       case 'years':
