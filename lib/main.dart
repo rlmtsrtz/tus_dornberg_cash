@@ -820,8 +820,18 @@ class _KassePageState extends State<KassePage> {
                                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                             children: [
                                               const Text('Zahlungsinformationen', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                              if (widget.isAdmin)
-                                                IconButton(icon: const Icon(Icons.edit, size: 20), onPressed: () => _showPaymentEditDialog(paymentInfo)),
+                                              Row(
+                                                children: [
+                                                  if (widget.isAdmin)
+                                                    IconButton(
+                                                      icon: const Icon(Icons.history, size: 20),
+                                                      onPressed: () => _showGlobalHistory(context, transSnap.data!, peopleSnap.data!),
+                                                      tooltip: 'Alle Buchungen einsehen',
+                                                    ),
+                                                  if (widget.isAdmin)
+                                                    IconButton(icon: const Icon(Icons.edit, size: 20), onPressed: () => _showPaymentEditDialog(paymentInfo)),
+                                                ],
+                                              ),
                                             ],
                                           ),
                                           const Divider(),
@@ -1374,6 +1384,54 @@ class _KassePageState extends State<KassePage> {
                                 }
                               },
                             ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Schließen'))],
+      ),
+    );
+  }
+
+  void _showGlobalHistory(BuildContext context, List<AppTransaction> transactions, List<Person> people) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Letzte Buchungen (Global)'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: transactions.isEmpty
+              ? const Text('Bisher keine Buchungen vorhanden.')
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: transactions.length,
+                  itemBuilder: (context, index) {
+                    final t = transactions[index];
+                    final person = people.firstWhere((p) => p.id == t.personId, orElse: () => Person(id: '?', name: 'Gelöschter Spieler', groups: []));
+                    return ListTile(
+                      title: Text(t.description),
+                      subtitle: Text('${person.name} • ${DateFormat('dd.MM.yy').format(t.date)}'),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('${t.amount.toStringAsFixed(2)} €', style: TextStyle(color: t.amount < 0 ? Colors.red : Colors.green)),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                            onPressed: () async {
+                              final confirm = await _showDeleteConfirm(context);
+                              if (confirm == true) {
+                                if (!widget.isTestDataMode) {
+                                  await FirebaseService.deleteTransaction(t.id);
+                                } else {
+                                  TestData.transactions.removeWhere((item) => item.id == t.id);
+                                  setState(() {});
+                                }
+                                if (mounted) Navigator.pop(context);
+                              }
+                            },
+                          ),
                         ],
                       ),
                     );
