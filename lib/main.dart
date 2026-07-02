@@ -604,7 +604,7 @@ class _KassePageState extends State<KassePage> {
     bool ibanPref = paymentInfo['preferred'] == 'iban';
     
     // Explicit Height Logic: Header(180) + Rows(each 35) + Buffer(20)
-    double calculatedHeight = 180 + (sorted.length * 35) + 20;
+    double calculatedHeight = 180 + (sorted.length * 100) + 20;
 
     Widget tableWidget = Container(
       width: 350, 
