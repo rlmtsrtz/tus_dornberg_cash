@@ -483,9 +483,10 @@ class _KassePageState extends State<KassePage> {
     }
   }
 
-  void _showRotationSettings(Map<String, dynamic> current) {
+  void _showRotationSettings(Map<String, dynamic> current, List<String> activeGroupNames) {
     final controller = TextEditingController(text: (current['rotationInterval'] ?? 1).toString());
     String unit = current['rotationUnit'] ?? 'days';
+    String? startGroup = current['rotationStartGroupName'];
 
     showDialog(
       context: context,
@@ -516,6 +517,15 @@ class _KassePageState extends State<KassePage> {
                   decoration: InputDecoration(labelText: unit == 'minutes' ? 'Anzahl Minuten' : 'Anzahl Stunden'),
                   keyboardType: TextInputType.number,
                 ),
+              const SizedBox(height: 16),
+              const Text('Startgruppe festlegen:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+              DropdownButton<String?>(
+                value: activeGroupNames.contains(startGroup) ? startGroup : null,
+                hint: const Text('Wähle Startgruppe'),
+                isExpanded: true,
+                onChanged: (val) => setDialogState(() => startGroup = val),
+                items: activeGroupNames.map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
+              ),
             ],
           ),
           actions: [
@@ -528,6 +538,7 @@ class _KassePageState extends State<KassePage> {
                     'rotationInterval': interval,
                     'rotationUnit': unit,
                     'rotationStart': DateTime.now().toIso8601String(),
+                    'rotationStartGroupName': startGroup,
                   });
                 }
                 Navigator.pop(context);
@@ -646,17 +657,19 @@ class _KassePageState extends State<KassePage> {
     return months;
   }
 
-  int _calculateActiveGroupIndex(int count, Map<String, dynamic> settings) {
+  int _calculateActiveGroupIndex(List<Map<String, dynamic>> activeGroups, Map<String, dynamic> settings) {
+    int count = activeGroups.length;
     if (count <= 1) return 0;
     
     final unit = settings['rotationUnit'] ?? 'days';
     final interval = settings['rotationInterval'] as int? ?? 1;
+    final startGroup = settings['rotationStartGroupName'];
     final now = DateTime.now();
     
     int rotationPoint = 0;
     
     switch (unit) {
-      case 'seconds': // For testing
+      case 'seconds':
         final startStr = settings['rotationStart'];
         if (startStr != null) {
           final start = DateTime.parse(startStr as String);
@@ -664,7 +677,6 @@ class _KassePageState extends State<KassePage> {
         }
         break;
       case 'minutes':
-        // Total minutes since epoch
         final totalMinutes = (now.millisecondsSinceEpoch / (1000 * 60)).floor();
         rotationPoint = (totalMinutes / interval).floor();
         break;
@@ -676,7 +688,6 @@ class _KassePageState extends State<KassePage> {
         rotationPoint = (now.millisecondsSinceEpoch / (1000 * 60 * 60 * 24)).floor();
         break;
       case 'weeks':
-        // Adjust epoch to Monday: epoch (Thursday) - 3 days
         final mondayAdjustedEpoch = now.subtract(const Duration(days: 3));
         rotationPoint = (mondayAdjustedEpoch.millisecondsSinceEpoch / (1000 * 60 * 60 * 24 * 7)).floor();
         break;
@@ -687,8 +698,15 @@ class _KassePageState extends State<KassePage> {
         rotationPoint = now.year;
         break;
     }
+
+    // Offset logic for start group
+    int offset = 0;
+    if (startGroup != null) {
+      final idx = activeGroups.indexWhere((g) => g['name'] == startGroup);
+      if (idx != -1) offset = idx;
+    }
     
-    return rotationPoint % count;
+    return (rotationPoint + offset) % count;
   }
 
   void _showFilterDialog(List<Penalty> penalties) {
@@ -785,7 +803,7 @@ class _KassePageState extends State<KassePage> {
                                 .where((g) => g['showInKasse'] == true)
                                 .toList()..sort((a, b) => (a['order'] as int).compareTo(b['order'] as int));
                             
-                            final activeIndex = _calculateActiveGroupIndex(activeGroups.length, settingsSnap.data!);
+                            final activeIndex = _calculateActiveGroupIndex(activeGroups, settingsSnap.data!);
 
                             return Scaffold(
                               body: Column(
@@ -879,7 +897,10 @@ class _KassePageState extends State<KassePage> {
                                                 padding: const EdgeInsets.only(right: 12.0),
                                                 child: IconButton(
                                                   icon: const Icon(Icons.timer_outlined, size: 18, color: Colors.grey),
-                                                  onPressed: () => _showRotationSettings(settingsSnap.data!),
+                                                  onPressed: () => _showRotationSettings(
+                                                    settingsSnap.data!, 
+                                                    activeGroups.map((g) => g['name'] as String).toList()
+                                                  ),
                                                   tooltip: 'Rotation einstellen',
                                                   visualDensity: VisualDensity.compact,
                                                 ),
@@ -1423,54 +1444,61 @@ class _PersonenListPageState extends State<PersonenListPage> {
                 const SizedBox(height: 16),
                 const Text('Dashboard-Auswahl:', style: TextStyle(fontWeight: FontWeight.bold)),
                 const Divider(),
-                Flexible(
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: groups.length,
-                    itemBuilder: (context, index) {
-                      final group = groups[index];
-                      final setting = settings.firstWhere((s) => s['name'] == group, orElse: () => {'showInKasse': false, 'order': index});
-                      return ListTile(
-                        title: Text(group, style: const TextStyle(fontSize: 14)),
-                        leading: Checkbox(
-                          value: setting['showInKasse'] ?? false,
-                          onChanged: (val) async {
-                            if (!widget.isTestDataMode) {
-                              await FirebaseService.updateGroupSetting(group, {'showInKasse': val});
-                            } else {
-                              final sIdx = TestData.groupSettings.indexWhere((s) => s['name'] == group);
-                              if (sIdx != -1) TestData.groupSettings[sIdx]['showInKasse'] = val;
-                              setState(() {});
-                              setDialogState(() {});
-                            }
-                          },
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.arrow_upward, size: 18),
-                              onPressed: () async {
-                                final newOrder = (setting['order'] as int) - 1;
+                StreamBuilder<List<Map<String, dynamic>>>(
+                  stream: widget.isTestDataMode ? TestData.getGroupSettingsStream() : FirebaseService.getGroupSettings(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) return const CircularProgressIndicator();
+                    final currentSettings = snapshot.data!;
+                    return Flexible(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: groups.length,
+                        itemBuilder: (context, index) {
+                          final group = groups[index];
+                          final setting = currentSettings.firstWhere((s) => s['name'] == group, orElse: () => {'showInKasse': false, 'order': index});
+                          return ListTile(
+                            title: Text(group, style: const TextStyle(fontSize: 14)),
+                            leading: Checkbox(
+                              value: setting['showInKasse'] ?? false,
+                              onChanged: (val) async {
                                 if (!widget.isTestDataMode) {
-                                  await FirebaseService.updateGroupSetting(group, {'order': newOrder});
+                                  await FirebaseService.updateGroupSetting(group, {'showInKasse': val});
                                 } else {
                                   final sIdx = TestData.groupSettings.indexWhere((s) => s['name'] == group);
-                                  if (sIdx != -1) TestData.groupSettings[sIdx]['order'] = newOrder;
+                                  if (sIdx != -1) TestData.groupSettings[sIdx]['showInKasse'] = val;
                                   setState(() {});
                                   setDialogState(() {});
                                 }
                               },
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.remove_circle_outline, color: Colors.red, size: 18),
-                              onPressed: () => FirebaseService.deleteGroup(group),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.arrow_upward, size: 18),
+                                  onPressed: () async {
+                                    final newOrder = (setting['order'] as int) - 1;
+                                    if (!widget.isTestDataMode) {
+                                      await FirebaseService.updateGroupSetting(group, {'order': newOrder});
+                                    } else {
+                                      final sIdx = TestData.groupSettings.indexWhere((s) => s['name'] == group);
+                                      if (sIdx != -1) TestData.groupSettings[sIdx]['order'] = newOrder;
+                                      setState(() {});
+                                      setDialogState(() {});
+                                    }
+                                  },
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
+                                  onPressed: () => FirebaseService.deleteGroup(group),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
+                          );
+                        },
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
