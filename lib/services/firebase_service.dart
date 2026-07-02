@@ -59,7 +59,11 @@ class FirebaseService {
   }
 
   static Future<void> addGroup(String name) {
-    return _db.collection('groups').doc(name).set({'createdAt': FieldValue.serverTimestamp()});
+    return _db.collection('groups').doc(name).set({
+      'createdAt': FieldValue.serverTimestamp(),
+      'showInKasse': false,
+      'order': 0,
+    });
   }
 
   static Future<void> deleteGroup(String name) {
@@ -69,7 +73,10 @@ class FirebaseService {
   static Future<void> renameGroup(String oldName, String newName) async {
     final batch = _db.batch();
     
-    batch.set(_db.collection('groups').doc(newName), {'createdAt': FieldValue.serverTimestamp()});
+    final oldDoc = await _db.collection('groups').doc(oldName).get();
+    final data = oldDoc.data() ?? {};
+    
+    batch.set(_db.collection('groups').doc(newName), {...data, 'name': newName});
     batch.delete(_db.collection('groups').doc(oldName));
     
     final persons = await _db.collection('people').where('groups', arrayContains: oldName).get();
@@ -81,6 +88,18 @@ class FirebaseService {
     }
     
     await batch.commit();
+  }
+
+  static Stream<List<Map<String, dynamic>>> getGroupSettings() {
+    return _db.collection('groups').snapshots().map((snapshot) =>
+        snapshot.docs.map((doc) => {
+          'name': doc.id,
+          ...doc.data()
+        }).toList());
+  }
+
+  static Future<void> updateGroupSetting(String groupName, Map<String, dynamic> data) {
+    return _db.collection('groups').doc(groupName).set(data, SetOptions(merge: true));
   }
 
   // --- PEOPLE ---
@@ -130,16 +149,21 @@ class FirebaseService {
 
   // --- SETTINGS ---
 
-  static Future<Map<String, String>> getSettings() async {
-    final doc = await _db.collection('settings').doc('season').get();
+  static Future<Map<String, dynamic>> getSettings() async {
+    final doc = await _db.collection('settings').doc('general').get();
     if (doc.exists) {
-      return Map<String, String>.from(doc.data()!);
+      return Map<String, dynamic>.from(doc.data()!);
     }
     return {};
   }
 
-  static Future<void> updateSettings(Map<String, String> settings) {
-    return _db.collection('settings').doc('season').set(settings, SetOptions(merge: true));
+  static Stream<Map<String, dynamic>> getSettingsStream() {
+    return _db.collection('settings').doc('general').snapshots().map((doc) =>
+        doc.exists ? Map<String, dynamic>.from(doc.data()!) : {});
+  }
+
+  static Future<void> updateSettings(Map<String, dynamic> settings) {
+    return _db.collection('settings').doc('general').set(settings, SetOptions(merge: true));
   }
 
   static Stream<Map<String, String>> getPaymentInfo() {

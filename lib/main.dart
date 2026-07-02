@@ -291,6 +291,7 @@ class TestData {
   static List<Penalty> penalties = [];
   static List<AppTransaction> transactions = [];
   static List<String> groups = ['MG 1', 'MG 2', 'MG 3', 'MG 4', 'Trainer', 'Ersatzbank'];
+  static List<Map<String, dynamic>> groupSettings = [];
 
   static void generate() {
     final names = [
@@ -348,17 +349,29 @@ class TestData {
       }
     }
     transactions.sort((a, b) => b.date.compareTo(a.date));
+
+    groupSettings = groups.map((g) => {
+      'name': g,
+      'showInKasse': true,
+      'order': groups.indexOf(g)
+    }).toList();
   }
 
   static Stream<List<Person>> getPeopleStream() => Stream.value(people);
   static Stream<List<Penalty>> getPenaltiesStream() => Stream.value(penalties);
   static Stream<List<AppTransaction>> getTransactionsStream() => Stream.value(transactions);
   static Stream<List<String>> getGroupsStream() => Stream.value(groups);
+  static Stream<List<Map<String, dynamic>>> getGroupSettingsStream() => Stream.value(groupSettings);
+  static Stream<Map<String, dynamic>> getSettingsStream() => Stream.value({
+    'rotationInterval': 10,
+    'rotationUnit': 'seconds',
+    'rotationStart': DateTime.now().toIso8601String(),
+  });
   static Stream<Map<String, String>> getPaymentStream() => Stream.value({
     'iban': 'DE12 3456 7890 1234 5678 90',
     'name': 'Max Mustermann (Test)',
     'email': 'test@dornberg.de',
-    'preferred': 'iban', // Default for test
+    'preferred': 'iban',
   });
 }
 
@@ -428,8 +441,8 @@ class _KassePageState extends State<KassePage> {
     final settings = await FirebaseService.getSettings();
     if (settings.containsKey('seasonStart') && settings.containsKey('seasonEnd')) {
       setState(() {
-        _startDate = DateTime.parse(settings['seasonStart']!);
-        _endDate = DateTime.parse(settings['seasonEnd']!);
+        _startDate = DateTime.parse(settings['seasonStart'] as String);
+        _endDate = DateTime.parse(settings['seasonEnd'] as String);
       });
     }
   }
@@ -456,6 +469,59 @@ class _KassePageState extends State<KassePage> {
         });
       }
     }
+  }
+
+  void _showRotationSettings(Map<String, dynamic> current) {
+    final controller = TextEditingController(text: (current['rotationInterval'] ?? 1).toString());
+    String unit = current['rotationUnit'] ?? 'days';
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Rotationseinstellungen'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: controller,
+                decoration: const InputDecoration(labelText: 'Intervall (Zahl)'),
+                keyboardType: TextInputType.number,
+              ),
+              DropdownButton<String>(
+                value: unit,
+                isExpanded: true,
+                onChanged: (val) => setDialogState(() => unit = val!),
+                items: const [
+                  DropdownMenuItem(value: 'hours', child: Text('Stunden')),
+                  DropdownMenuItem(value: 'days', child: Text('Tage')),
+                  DropdownMenuItem(value: 'weeks', child: Text('Wochen')),
+                  DropdownMenuItem(value: 'months', child: Text('Monate')),
+                  DropdownMenuItem(value: 'years', child: Text('Jahre')),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Abbrechen')),
+            ElevatedButton(
+              onPressed: () async {
+                final interval = int.tryParse(controller.text) ?? 1;
+                if (!widget.isTestDataMode) {
+                  await FirebaseService.updateSettings({
+                    'rotationInterval': interval,
+                    'rotationUnit': unit,
+                    'rotationStart': DateTime.now().toIso8601String(),
+                  });
+                }
+                Navigator.pop(context);
+              },
+              child: const Text('Speichern'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showPaymentEditDialog(Map<String, String> current) {
@@ -564,6 +630,32 @@ class _KassePageState extends State<KassePage> {
     return months;
   }
 
+  int _calculateActiveGroupIndex(int count, Map<String, dynamic> settings) {
+    if (count <= 1) return 0;
+    final startStr = settings['rotationStart'];
+    if (startStr == null) return 0;
+    
+    final start = DateTime.parse(startStr as String);
+    final now = DateTime.now();
+    final interval = settings['rotationInterval'] as int? ?? 1;
+    final unit = settings['rotationUnit'] as String? ?? 'days';
+    
+    final diff = now.difference(start);
+    int totalUnits = 0;
+    
+    switch (unit) {
+      case 'seconds': totalUnits = diff.inSeconds; break;
+      case 'hours': totalUnits = diff.inHours; break;
+      case 'days': totalUnits = diff.inDays; break;
+      case 'weeks': totalUnits = (diff.inDays / 7).floor(); break;
+      case 'months': totalUnits = (diff.inDays / 30).floor(); break;
+      case 'years': totalUnits = (diff.inDays / 365).floor(); break;
+      default: totalUnits = diff.inDays;
+    }
+    
+    return (totalUnits / interval).floor() % count;
+  }
+
   void _showFilterDialog(List<Penalty> penalties) {
     showDialog(
       context: context,
@@ -616,8 +708,9 @@ class _KassePageState extends State<KassePage> {
     final peopleStream = widget.isTestDataMode ? TestData.getPeopleStream() : FirebaseService.getPeople();
     final transStream = widget.isTestDataMode ? TestData.getTransactionsStream() : FirebaseService.getTransactions();
     final penaltyStream = widget.isTestDataMode ? TestData.getPenaltiesStream() : FirebaseService.getPenalties();
-    final groupsStream = widget.isTestDataMode ? TestData.getGroupsStream() : FirebaseService.getGroups();
     final paymentStream = widget.isTestDataMode ? TestData.getPaymentStream() : FirebaseService.getPaymentInfo();
+    final groupSettingsStream = widget.isTestDataMode ? TestData.getGroupSettingsStream() : FirebaseService.getGroupSettings();
+    final settingsStream = widget.isTestDataMode ? TestData.getSettingsStream() : FirebaseService.getSettingsStream();
 
     return StreamBuilder<List<Person>>(
       stream: peopleStream,
@@ -628,201 +721,268 @@ class _KassePageState extends State<KassePage> {
             return StreamBuilder<List<Penalty>>(
               stream: penaltyStream,
               builder: (context, penaltySnap) {
-                return StreamBuilder<List<String>>(
-                  stream: groupsStream,
-                  builder: (context, groupsSnap) {
-                    return StreamBuilder<Map<String, String>>(
-                      stream: paymentStream,
-                      builder: (context, paymentSnap) {
-                        if (!peopleSnap.hasData || !transSnap.hasData || !penaltySnap.hasData || !groupsSnap.hasData || !paymentSnap.hasData) {
-                          return const Center(child: CircularProgressIndicator());
-                        }
+                return StreamBuilder<Map<String, String>>(
+                  stream: paymentStream,
+                  builder: (context, paymentSnap) {
+                    return StreamBuilder<List<Map<String, dynamic>>>(
+                      stream: groupSettingsStream,
+                      builder: (context, groupSettingsSnap) {
+                        return StreamBuilder<Map<String, dynamic>>(
+                          stream: settingsStream,
+                          builder: (context, settingsSnap) {
+                            if (!peopleSnap.hasData || !transSnap.hasData || !penaltySnap.hasData || !paymentSnap.hasData || !groupSettingsSnap.hasData || !settingsSnap.hasData) {
+                              return const Center(child: CircularProgressIndicator());
+                            }
 
-                        final paymentInfo = paymentSnap.data!;
-                        final ibanPref = paymentInfo['preferred'] == 'iban';
-                        
-                        var filteredPeople = peopleSnap.data!
-                          ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-                        
-                        if (_searchQuery.isNotEmpty) {
-                          filteredPeople = filteredPeople.where((p) => p.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
-                        }
+                            final paymentInfo = paymentSnap.data!;
+                            final ibanPref = paymentInfo['preferred'] == 'iban';
+                            
+                            var filteredPeople = peopleSnap.data!
+                              ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+                            
+                            if (_searchQuery.isNotEmpty) {
+                              filteredPeople = filteredPeople.where((p) => p.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+                            }
 
-                        final seasonMonths = _getSeasonMonths();
+                            final seasonMonths = _getSeasonMonths();
+                            
+                            final activeGroups = groupSettingsSnap.data!
+                                .where((g) => g['showInKasse'] == true)
+                                .toList()..sort((a, b) => (a['order'] as int).compareTo(b['order'] as int));
+                            
+                            final activeIndex = _calculateActiveGroupIndex(activeGroups.length, settingsSnap.data!);
 
-                        return Scaffold(
-                          body: Column(
-                            children: [
-                              Card(
-                                margin: const EdgeInsets.all(12),
-                                color: const Color(0xFFE8F5E9),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(12),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            return Scaffold(
+                              body: Column(
+                                children: [
+                                  Card(
+                                    margin: const EdgeInsets.all(12),
+                                    color: const Color(0xFFE8F5E9),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(12),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          const Text('Zahlungsinformationen', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                          if (widget.isAdmin)
-                                            IconButton(icon: const Icon(Icons.edit, size: 20), onPressed: () => _showPaymentEditDialog(paymentInfo)),
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              const Text('Zahlungsinformationen', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                              if (widget.isAdmin)
+                                                IconButton(icon: const Icon(Icons.edit, size: 20), onPressed: () => _showPaymentEditDialog(paymentInfo)),
+                                            ],
+                                          ),
+                                          const Divider(),
+                                          const Text('Präferierte Zahlungsmethode:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                          if (ibanPref) ...[
+                                            _buildInfoRow('IBAN', _formatIBAN(paymentInfo['iban'] ?? ''), isIban: true, isBold: true),
+                                            if (paymentInfo['name'] != null)
+                                              Padding(
+                                                padding: const EdgeInsets.only(left: 4.0),
+                                                child: Text('Inhaber: ${paymentInfo['name']}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                              ),
+                                          ] else
+                                            _buildInfoRow('E-Mail', paymentInfo['email'] ?? '', isBold: true),
+                                          
+                                          const SizedBox(height: 8),
+                                          const Text('Sekundäre Zahlungsmethode:', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                                          if (!ibanPref) ...[
+                                            _buildInfoRow('IBAN', _formatIBAN(paymentInfo['iban'] ?? ''), isIban: true),
+                                            if (paymentInfo['name'] != null)
+                                              Padding(
+                                                padding: const EdgeInsets.only(left: 4.0),
+                                                child: Text('Inhaber: ${paymentInfo['name']}', style: const TextStyle(fontSize: 11)),
+                                              ),
+                                          ] else
+                                            _buildInfoRow('E-Mail', paymentInfo['email'] ?? ''),
                                         ],
                                       ),
-                                      const Divider(),
-                                      const Text('Präferierte Zahlungsmethode:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                      if (ibanPref) ...[
-                                        _buildInfoRow('IBAN', _formatIBAN(paymentInfo['iban'] ?? ''), isIban: true, isBold: true),
-                                        if (paymentInfo['name'] != null)
-                                          Padding(
-                                            padding: const EdgeInsets.only(left: 4.0),
-                                            child: Text('Inhaber: ${paymentInfo['name']}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                                          ),
-                                      ] else
-                                        _buildInfoRow('E-Mail', paymentInfo['email'] ?? '', isBold: true),
-                                      
-                                      const SizedBox(height: 8),
-                                      const Text('Sekundäre Zahlungsmethode:', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                                      if (!ibanPref) ...[
-                                        _buildInfoRow('IBAN', _formatIBAN(paymentInfo['iban'] ?? ''), isIban: true),
-                                        if (paymentInfo['name'] != null)
-                                          Padding(
-                                            padding: const EdgeInsets.only(left: 4.0),
-                                            child: Text('Inhaber: ${paymentInfo['name']}', style: const TextStyle(fontSize: 11)),
-                                          ),
-                                      ] else
-                                        _buildInfoRow('E-Mail', paymentInfo['email'] ?? ''),
-                                    ],
+                                    ),
                                   ),
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                color: const Color(0xFFF1F8E9),
-                                child: Column(
-                                  children: [
-                                    Row(
-                                      children: [
-                                        const Text('Spieler & Strafen', style: TextStyle(fontWeight: FontWeight.bold)),
-                                        const Spacer(),
-                                        AnimatedContainer(
-                                          duration: const Duration(milliseconds: 300),
-                                          width: _isSearchExpanded ? 200 : 40,
-                                          height: 40,
-                                          child: Row(
-                                            mainAxisAlignment: MainAxisAlignment.end,
-                                            children: [
-                                              if (_isSearchExpanded)
-                                                Expanded(
-                                                  child: TextField(
-                                                    autofocus: true,
-                                                    decoration: const InputDecoration(
-                                                      hintText: 'Suche...',
-                                                      isDense: true,
-                                                      contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                                                      border: OutlineInputBorder(),
-                                                      prefixIcon: Icon(Icons.search, size: 18),
+                                  
+                                  if (activeGroups.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 8.0),
+                                      child: Column(
+                                        children: [
+                                          SingleChildScrollView(
+                                            scrollDirection: Axis.horizontal,
+                                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                                            child: Row(
+                                              children: activeGroups.asMap().entries.map((entry) {
+                                                final idx = entry.key;
+                                                final group = entry.value;
+                                                final isActive = idx == activeIndex;
+                                                return AnimatedOpacity(
+                                                  duration: const Duration(milliseconds: 800),
+                                                  opacity: isActive ? 1.0 : 0.3,
+                                                  child: Container(
+                                                    margin: const EdgeInsets.only(right: 8),
+                                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                                    decoration: BoxDecoration(
+                                                      color: isActive ? const Color(0xFFA5D6A7) : Colors.grey[200],
+                                                      borderRadius: BorderRadius.circular(25),
+                                                      border: Border.all(color: isActive ? Colors.green[700]! : Colors.grey[400]!),
+                                                      boxShadow: isActive ? [BoxShadow(color: Colors.green.withOpacity(0.3), blurRadius: 4, offset: const Offset(0, 2))] : null,
                                                     ),
-                                                    onChanged: (val) => setState(() => _searchQuery = val),
+                                                    child: Text(
+                                                      group['name'] as String,
+                                                      style: TextStyle(
+                                                        fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                                                        color: isActive ? Colors.green[900] : Colors.grey[700],
+                                                        fontSize: isActive ? 14 : 13,
+                                                      ),
+                                                    ),
                                                   ),
+                                                );
+                                              }).toList(),
+                                            ),
+                                          ),
+                                          if (widget.isAdmin)
+                                            Align(
+                                              alignment: Alignment.centerRight,
+                                              child: Padding(
+                                                padding: const EdgeInsets.only(right: 12.0),
+                                                child: IconButton(
+                                                  icon: const Icon(Icons.timer_outlined, size: 18, color: Colors.grey),
+                                                  onPressed: () => _showRotationSettings(settingsSnap.data!),
+                                                  tooltip: 'Rotation einstellen',
+                                                  visualDensity: VisualDensity.compact,
                                                 ),
-                                              IconButton(
-                                                icon: Icon(_isSearchExpanded ? Icons.close : Icons.search, 
-                                                     color: _searchQuery.isNotEmpty ? Colors.green : null),
-                                                onPressed: () {
-                                                  setState(() {
-                                                    _isSearchExpanded = !_isSearchExpanded;
-                                                    if (!_isSearchExpanded) _searchQuery = '';
-                                                  });
-                                                },
                                               ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    color: const Color(0xFFF1F8E9),
+                                    child: Column(
+                                      children: [
+                                        Row(
+                                          children: [
+                                            const Text('Spieler & Strafen', style: TextStyle(fontWeight: FontWeight.bold)),
+                                            const Spacer(),
+                                            AnimatedContainer(
+                                              duration: const Duration(milliseconds: 300),
+                                              width: _isSearchExpanded ? 200 : 40,
+                                              height: 40,
+                                              child: Row(
+                                                mainAxisAlignment: MainAxisAlignment.end,
+                                                children: [
+                                                  if (_isSearchExpanded)
+                                                    Expanded(
+                                                      child: TextField(
+                                                        autofocus: true,
+                                                        decoration: const InputDecoration(
+                                                          hintText: 'Suche...',
+                                                          isDense: true,
+                                                          contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                                                          border: OutlineInputBorder(),
+                                                          prefixIcon: Icon(Icons.search, size: 18),
+                                                        ),
+                                                        onChanged: (val) => setState(() => _searchQuery = val),
+                                                      ),
+                                                    ),
+                                                  IconButton(
+                                                    icon: Icon(_isSearchExpanded ? Icons.close : Icons.search, 
+                                                         color: _searchQuery.isNotEmpty ? Colors.green : null),
+                                                    onPressed: () {
+                                                      setState(() {
+                                                        _isSearchExpanded = !_isSearchExpanded;
+                                                        if (!_isSearchExpanded) _searchQuery = '';
+                                                      });
+                                                    },
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            IconButton(
+                                              icon: Icon(Icons.filter_list, color: _selectedPenaltyFilter != null ? Colors.green : null),
+                                              onPressed: () => _showFilterDialog(penaltySnap.data!),
+                                              tooltip: 'Nach Strafe filtern',
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              'Saison: ${DateFormat('dd.MM.yy').format(_startDate)} - ${DateFormat('dd.MM.yy').format(_endDate)}',
+                                              style: const TextStyle(fontWeight: FontWeight.bold),
+                                            ),
+                                            if (widget.isAdmin)
+                                              IconButton(
+                                                icon: const Icon(Icons.calendar_month),
+                                                onPressed: _showSeasonSettings,
+                                              ),
+                                          ],
+                                        ),
+                                        SingleChildScrollView(
+                                          scrollDirection: Axis.horizontal,
+                                          child: Row(
+                                            children: [
+                                              FilterChip(
+                                                label: const Text('Gesamt'),
+                                                selected: _selectedMonthStart == null,
+                                                onSelected: (val) => setState(() => _selectedMonthStart = null),
+                                                selectedColor: const Color(0xFFA5D6A7),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              ...seasonMonths.map((m) => Padding(
+                                                padding: const EdgeInsets.only(right: 8),
+                                                child: FilterChip(
+                                                  label: Text(DateFormat('MMM yy').format(m)),
+                                                  selected: _selectedMonthStart?.year == m.year && _selectedMonthStart?.month == m.month,
+                                                  onSelected: (val) => setState(() => _selectedMonthStart = val ? m : null),
+                                                  selectedColor: const Color(0xFFA5D6A7),
+                                                ),
+                                              )),
                                             ],
                                           ),
                                         ),
-                                        IconButton(
-                                          icon: Icon(Icons.filter_list, color: _selectedPenaltyFilter != null ? Colors.green : null),
-                                          onPressed: () => _showFilterDialog(penaltySnap.data!),
-                                          tooltip: 'Nach Strafe filtern',
-                                        ),
                                       ],
                                     ),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          'Saison: ${DateFormat('dd.MM.yy').format(_startDate)} - ${DateFormat('dd.MM.yy').format(_endDate)}',
-                                          style: const TextStyle(fontWeight: FontWeight.bold),
-                                        ),
-                                        if (widget.isAdmin)
-                                          IconButton(
-                                            icon: const Icon(Icons.calendar_month),
-                                            onPressed: _showSeasonSettings,
-                                          ),
-                                      ],
-                                    ),
-                                    SingleChildScrollView(
-                                      scrollDirection: Axis.horizontal,
-                                      child: Row(
-                                        children: [
-                                          FilterChip(
-                                            label: const Text('Gesamt'),
-                                            selected: _selectedMonthStart == null,
-                                            onSelected: (val) => setState(() => _selectedMonthStart = null),
-                                            selectedColor: const Color(0xFFA5D6A7),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          ...seasonMonths.map((m) => Padding(
-                                            padding: const EdgeInsets.only(right: 8),
-                                            child: FilterChip(
-                                              label: Text(DateFormat('MMM yy').format(m)),
-                                              selected: _selectedMonthStart?.year == m.year && _selectedMonthStart?.month == m.month,
-                                              onSelected: (val) => setState(() => _selectedMonthStart = val ? m : null),
-                                              selectedColor: const Color(0xFFA5D6A7),
+                                  ),
+                                  Expanded(
+                                    child: ListView.builder(
+                                      itemCount: filteredPeople.length,
+                                      itemBuilder: (context, index) {
+                                        final p = filteredPeople[index];
+                                        final balance = _calculateBalance(p.id, transSnap.data!, penaltyFilter: _selectedPenaltyFilter);
+                                        return InkWell(
+                                          onTap: () => _showHistory(context, p, transSnap.data!),
+                                          child: ListTile(
+                                            leading: CircleAvatar(
+                                              backgroundColor: const Color(0xFFA5D6A7),
+                                              child: Text(p.name[0], style: const TextStyle(color: Colors.white)),
                                             ),
-                                          )),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Expanded(
-                                child: ListView.builder(
-                                  itemCount: filteredPeople.length,
-                                  itemBuilder: (context, index) {
-                                    final p = filteredPeople[index];
-                                    final balance = _calculateBalance(p.id, transSnap.data!, penaltyFilter: _selectedPenaltyFilter);
-                                    return InkWell(
-                                      onTap: () => _showHistory(context, p, transSnap.data!),
-                                      child: ListTile(
-                                        leading: CircleAvatar(
-                                          backgroundColor: const Color(0xFFA5D6A7),
-                                          child: Text(p.name[0], style: const TextStyle(color: Colors.white)),
-                                        ),
-                                        title: _buildHighlightedText(p.name, _searchQuery),
-                                        subtitle: Text(p.groups.join(', ')),
-                                        trailing: Text(
-                                          '${balance.toStringAsFixed(2).replaceAll('.', ',')} €',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            color: balance < 0 ? Colors.red : (balance > 0 ? Colors.green : Colors.black),
+                                            title: _buildHighlightedText(p.name, _searchQuery),
+                                            subtitle: Text(p.groups.join(', ')),
+                                            trailing: Text(
+                                              '${balance.toStringAsFixed(2).replaceAll('.', ',')} €',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: balance < 0 ? Colors.red : (balance > 0 ? Colors.green : Colors.black),
+                                              ),
+                                            ),
                                           ),
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                          floatingActionButton: widget.isAdmin
-                              ? FloatingActionButton(
-                                  onPressed: () => _addTransaction(context, peopleSnap.data!, penaltySnap.data!, transSnap.data!, groupsSnap.data!),
-                                  backgroundColor: const Color(0xFF4CAF50),
-                                  child: const Icon(Icons.add, color: Colors.white),
-                                )
-                              : null,
+                              floatingActionButton: widget.isAdmin
+                                  ? FloatingActionButton(
+                                      onPressed: () => _addTransaction(context, peopleSnap.data!, penaltySnap.data!, transSnap.data!, []),
+                                      backgroundColor: const Color(0xFF4CAF50),
+                                      child: const Icon(Icons.add, color: Colors.white),
+                                    )
+                                  : null,
+                            );
+                          }
                         );
                       }
                     );
@@ -1196,138 +1356,7 @@ class PersonenListPage extends StatefulWidget {
 }
 
 class _PersonenListPageState extends State<PersonenListPage> {
-  @override
-  Widget build(BuildContext context) {
-    final peopleStream = widget.isTestDataMode ? TestData.getPeopleStream() : FirebaseService.getPeople();
-    final groupsStream = widget.isTestDataMode ? TestData.getGroupsStream() : FirebaseService.getGroups();
-
-    return StreamBuilder<List<Person>>(
-      stream: peopleStream,
-      builder: (context, peopleSnap) {
-        return StreamBuilder<List<String>>(
-          stream: groupsStream,
-          builder: (context, groupsSnap) {
-            if (!peopleSnap.hasData || !groupsSnap.hasData) return const Center(child: CircularProgressIndicator());
-            final people = peopleSnap.data!..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-            final groups = groupsSnap.data!;
-
-            return Scaffold(
-              appBar: widget.isAdmin ? AppBar(
-                toolbarHeight: 40,
-                backgroundColor: Colors.white,
-                title: TextButton.icon(
-                  onPressed: () => _manageGroups(context, groups),
-                  icon: const Icon(Icons.edit_note, size: 18),
-                  label: const Text('Gruppen verwalten', style: TextStyle(fontSize: 12)),
-                ),
-              ) : null,
-              body: Row(
-                children: [
-                  Expanded(
-                    flex: 1,
-                    child: Container(
-                      color: Colors.grey[50],
-                      child: Column(
-                        children: [
-                          const Padding(
-                            padding: EdgeInsets.all(12.0),
-                            child: Text('Alle Personen', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          ),
-                          Expanded(
-                            child: ListView.builder(
-                              itemCount: people.length,
-                              itemBuilder: (context, index) {
-                                final p = people[index];
-                                return ListTile(
-                                  title: Text(p.name),
-                                  subtitle: Text(p.groups.isEmpty ? 'Keine Gruppe' : p.groups.join(', ')),
-                                  onTap: widget.isAdmin ? () => _showPersonDialog(context, groups, person: p) : null,
-                                  trailing: widget.isAdmin 
-                                      ? IconButton(
-                                          icon: const Icon(Icons.delete, color: Colors.red), 
-                                          onPressed: () => _confirmDelete(context, () {
-                                            if (!widget.isTestDataMode) {
-                                              FirebaseService.deletePerson(p.id);
-                                            } else {
-                                              TestData.people.removeWhere((item) => item.id == p.id);
-                                              setState(() {});
-                                            }
-                                          })
-                                        ) 
-                                      : null,
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const VerticalDivider(width: 1),
-                  Expanded(
-                    flex: 1,
-                    child: Column(
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.all(12.0),
-                          child: Text('Gruppen-Übersicht', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        ),
-                        Expanded(
-                          child: ListView(
-                            children: groups.map((group) {
-                              final groupPeople = people.where((p) => p.groups.contains(group)).toList();
-                              return Container(
-                                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  border: Border.all(color: Colors.grey[200]!),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(group, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2E7D32))),
-                                    const SizedBox(height: 8),
-                                    Wrap(
-                                      spacing: 6,
-                                      runSpacing: 6,
-                                      children: groupPeople.map((p) => Chip(
-                                        label: Text(p.name, style: const TextStyle(fontSize: 12)),
-                                        backgroundColor: const Color(0xFFF1F8E9),
-                                        side: BorderSide.none,
-                                        padding: EdgeInsets.zero,
-                                        visualDensity: VisualDensity.compact,
-                                      )).toList(),
-                                    ),
-                                    if (groupPeople.isEmpty)
-                                      const Text('Keine Personen', style: TextStyle(color: Colors.grey, fontSize: 12, fontStyle: FontStyle.italic)),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              floatingActionButton: widget.isAdmin
-                  ? FloatingActionButton(
-                      onPressed: () => _showPersonDialog(context, groups),
-                      backgroundColor: const Color(0xFF4CAF50),
-                      child: const Icon(Icons.add, color: Colors.white),
-                    )
-                  : null,
-            );
-          }
-        );
-      },
-    );
-  }
-
-  void _manageGroups(BuildContext context, List<String> groups) {
+  void _manageGroups(BuildContext context, List<String> groups, List<Map<String, dynamic>> settings) {
     final controller = TextEditingController();
     showDialog(
       context: context,
@@ -1348,14 +1377,16 @@ class _PersonenListPageState extends State<PersonenListPage> {
                         await FirebaseService.addGroup(val.trim());
                       } else {
                         TestData.groups.add(val.trim());
+                        TestData.groupSettings.add({'name': val.trim(), 'showInKasse': false, 'order': TestData.groups.length});
                         setState(() {});
+                        setDialogState(() {});
                       }
                       controller.clear();
                     }
                   },
                 ),
                 const SizedBox(height: 16),
-                const Text('Vorhandene Gruppen:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text('Dashboard-Auswahl:', style: TextStyle(fontWeight: FontWeight.bold)),
                 const Divider(),
                 Flexible(
                   child: ListView.builder(
@@ -1363,23 +1394,49 @@ class _PersonenListPageState extends State<PersonenListPage> {
                     itemCount: groups.length,
                     itemBuilder: (context, index) {
                       final group = groups[index];
+                      final setting = settings.firstWhere((s) => s['name'] == group, orElse: () => {'showInKasse': false, 'order': index});
                       return ListTile(
-                        title: Text(group),
+                        title: Text(group, style: const TextStyle(fontSize: 14)),
+                        leading: Checkbox(
+                          value: setting['showInKasse'] ?? false,
+                          onChanged: (val) async {
+                            if (!widget.isTestDataMode) {
+                              await FirebaseService.updateGroupSetting(group, {'showInKasse': val});
+                            } else {
+                              final sIdx = TestData.groupSettings.indexWhere((s) => s['name'] == group);
+                              if (sIdx != -1) TestData.groupSettings[sIdx]['showInKasse'] = val;
+                              setState(() {});
+                              setDialogState(() {});
+                            }
+                          },
+                        ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.edit, size: 20),
-                              onPressed: () => _renameGroupDialog(context, group),
+                              icon: const Icon(Icons.arrow_upward, size: 18),
+                              onPressed: () async {
+                                final newOrder = (setting['order'] as int) - 1;
+                                if (!widget.isTestDataMode) {
+                                  await FirebaseService.updateGroupSetting(group, {'order': newOrder});
+                                } else {
+                                  final sIdx = TestData.groupSettings.indexWhere((s) => s['name'] == group);
+                                  if (sIdx != -1) TestData.groupSettings[sIdx]['order'] = newOrder;
+                                  setState(() {});
+                                  setDialogState(() {});
+                                }
+                              },
                             ),
                             IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                              icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
                               onPressed: () => _confirmDelete(context, () {
                                 if (!widget.isTestDataMode) {
                                   FirebaseService.deleteGroup(group);
                                 } else {
                                   TestData.groups.remove(group);
+                                  TestData.groupSettings.removeWhere((s) => s['name'] == group);
                                   setState(() {});
+                                  setDialogState(() {});
                                 }
                               }),
                             ),
@@ -1394,35 +1451,6 @@ class _PersonenListPageState extends State<PersonenListPage> {
           ),
           actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Schließen'))],
         ),
-      ),
-    );
-  }
-
-  void _renameGroupDialog(BuildContext context, String oldName) {
-    final controller = TextEditingController(text: oldName);
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('"$oldName" umbenennen'),
-        content: TextField(controller: controller, decoration: const InputDecoration(labelText: 'Neuer Name')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Abbrechen')),
-          ElevatedButton(
-            onPressed: () async {
-              if (controller.text.isNotEmpty && controller.text != oldName) {
-                if (!widget.isTestDataMode) {
-                  await FirebaseService.renameGroup(oldName, controller.text.trim());
-                } else {
-                  final idx = TestData.groups.indexOf(oldName);
-                  if (idx != -1) TestData.groups[idx] = controller.text.trim();
-                  setState(() {});
-                }
-                if (mounted) Navigator.pop(context);
-              }
-            },
-            child: const Text('Speichern'),
-          ),
-        ],
       ),
     );
   }
@@ -1511,6 +1539,144 @@ class _PersonenListPageState extends State<PersonenListPage> {
       ),
     );
   }
+
+  @override
+  Widget build(BuildContext context) {
+    final peopleStream = widget.isTestDataMode ? TestData.getPeopleStream() : FirebaseService.getPeople();
+    final groupsStream = widget.isTestDataMode ? TestData.getGroupsStream() : FirebaseService.getGroups();
+    final groupSettingsStream = widget.isTestDataMode ? TestData.getGroupSettingsStream() : FirebaseService.getGroupSettings();
+
+    return StreamBuilder<List<Person>>(
+      stream: peopleStream,
+      builder: (context, peopleSnap) {
+        return StreamBuilder<List<String>>(
+          stream: groupsStream,
+          builder: (context, groupsSnap) {
+            return StreamBuilder<List<Map<String, dynamic>>>(
+              stream: groupSettingsStream,
+              builder: (context, groupSettingsSnap) {
+                if (!peopleSnap.hasData || !groupsSnap.hasData || !groupSettingsSnap.hasData) return const Center(child: CircularProgressIndicator());
+                final people = peopleSnap.data!..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+                final groups = groupsSnap.data!;
+                final groupSettings = groupSettingsSnap.data!;
+
+                return Scaffold(
+                  appBar: widget.isAdmin ? AppBar(
+                    toolbarHeight: 40,
+                    backgroundColor: Colors.white,
+                    title: TextButton.icon(
+                      onPressed: () => _manageGroups(context, groups, groupSettings),
+                      icon: const Icon(Icons.edit_note, size: 18),
+                      label: const Text('Gruppen verwalten', style: TextStyle(fontSize: 12)),
+                    ),
+                  ) : null,
+                  body: Row(
+                    children: [
+                      Expanded(
+                        flex: 1,
+                        child: Container(
+                          color: Colors.grey[50],
+                          child: Column(
+                            children: [
+                              const Padding(
+                                padding: EdgeInsets.all(12.0),
+                                child: Text('Alle Personen', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                              ),
+                              Expanded(
+                                child: ListView.builder(
+                                  itemCount: people.length,
+                                  itemBuilder: (context, index) {
+                                    final p = people[index];
+                                    return ListTile(
+                                      title: Text(p.name),
+                                      subtitle: Text(p.groups.isEmpty ? 'Keine Gruppe' : p.groups.join(', ')),
+                                      onTap: widget.isAdmin ? () => _showPersonDialog(context, groups, person: p) : null,
+                                      trailing: widget.isAdmin 
+                                          ? IconButton(
+                                              icon: const Icon(Icons.delete, color: Colors.red), 
+                                              onPressed: () => _confirmDelete(context, () {
+                                                if (!widget.isTestDataMode) {
+                                                  FirebaseService.deletePerson(p.id);
+                                                } else {
+                                                  TestData.people.removeWhere((item) => item.id == p.id);
+                                                  setState(() {});
+                                                }
+                                              })
+                                            ) 
+                                          : null,
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const VerticalDivider(width: 1),
+                      Expanded(
+                        flex: 1,
+                        child: Column(
+                          children: [
+                            const Padding(
+                              padding: EdgeInsets.all(12.0),
+                              child: Text('Gruppen-Übersicht', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            ),
+                            Expanded(
+                              child: ListView(
+                                children: groups.map((group) {
+                                  final groupPeople = people.where((p) => p.groups.contains(group)).toList();
+                                  return Container(
+                                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      border: Border.all(color: Colors.grey[200]!),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(group, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2E7D32))),
+                                        const SizedBox(height: 8),
+                                        Wrap(
+                                          spacing: 6,
+                                          runSpacing: 6,
+                                          children: groupPeople.map((p) => Chip(
+                                            label: Text(p.name, style: const TextStyle(fontSize: 12)),
+                                            backgroundColor: const Color(0xFFF1F8E9),
+                                            side: BorderSide.none,
+                                            padding: EdgeInsets.zero,
+                                            visualDensity: VisualDensity.compact,
+                                          )).toList(),
+                                        ),
+                                        if (groupPeople.isEmpty)
+                                          const Text('Keine Personen', style: TextStyle(color: Colors.grey, fontSize: 12, fontStyle: FontStyle.italic)),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  floatingActionButton: widget.isAdmin
+                      ? FloatingActionButton(
+                          onPressed: () => _showPersonDialog(context, groups),
+                          backgroundColor: const Color(0xFF4CAF50),
+                          child: const Icon(Icons.add, color: Colors.white),
+                        )
+                      : null,
+                );
+              }
+            );
+          }
+        );
+      },
+    );
+  }
 }
 
 // --- STRAFEN LIST PAGE ---
@@ -1525,79 +1691,6 @@ class StrafenListPage extends StatefulWidget {
 }
 
 class _StrafenListPageState extends State<StrafenListPage> {
-  @override
-  Widget build(BuildContext context) {
-    final penaltyStream = widget.isTestDataMode ? TestData.getPenaltiesStream() : FirebaseService.getPenalties();
-
-    return StreamBuilder<List<Penalty>>(
-      stream: penaltyStream,
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        final penalties = snapshot.data!;
-
-        return Scaffold(
-          body: ListView.builder(
-            itemCount: penalties.length,
-            itemBuilder: (context, index) {
-              final p = penalties[index];
-              return InkWell(
-                onTap: widget.isAdmin ? () => _showPenaltyDialog(context, penalty: p) : null,
-                child: ListTile(
-                  title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('${p.amount.toStringAsFixed(2).replaceAll('.', ',')} €'),
-                      if (p.description.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4.0),
-                          child: Text(
-                            p.description,
-                            style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey),
-                          ),
-                        ),
-                      if (p.tags.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4.0),
-                          child: Wrap(
-                            spacing: 4,
-                            children: p.tags.map((tag) => Chip(
-                              label: Text(tag, style: const TextStyle(fontSize: 10)),
-                              padding: EdgeInsets.zero,
-                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              visualDensity: VisualDensity.compact,
-                            )).toList(),
-                          ),
-                        ),
-                    ],
-                  ),
-                  trailing: widget.isAdmin ? IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.red), 
-                    onPressed: () => _confirmDelete(context, () {
-                      if (!widget.isTestDataMode) {
-                        FirebaseService.deletePenalty(p.id);
-                      } else {
-                        TestData.penalties.removeWhere((item) => item.id == p.id);
-                        setState(() {});
-                      }
-                    })
-                  ) : null,
-                ),
-              );
-            },
-          ),
-          floatingActionButton: widget.isAdmin
-              ? FloatingActionButton(
-                  onPressed: () => _showPenaltyDialog(context),
-                  backgroundColor: const Color(0xFF4CAF50),
-                  child: const Icon(Icons.add, color: Colors.white),
-                )
-              : null,
-        );
-      },
-    );
-  }
-
   void _showPenaltyDialog(BuildContext context, {Penalty? penalty}) {
     final nameC = TextEditingController(text: penalty?.name);
     final amountC = TextEditingController(text: penalty?.amount.toString());
@@ -1673,6 +1766,79 @@ class _StrafenListPageState extends State<StrafenListPage> {
           ),
         ],
       ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final penaltyStream = widget.isTestDataMode ? TestData.getPenaltiesStream() : FirebaseService.getPenalties();
+
+    return StreamBuilder<List<Penalty>>(
+      stream: penaltyStream,
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        final penalties = snapshot.data!;
+
+        return Scaffold(
+          body: ListView.builder(
+            itemCount: penalties.length,
+            itemBuilder: (context, index) {
+              final p = penalties[index];
+              return InkWell(
+                onTap: widget.isAdmin ? () => _showPenaltyDialog(context, penalty: p) : null,
+                child: ListTile(
+                  title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('${p.amount.toStringAsFixed(2).replaceAll('.', ',')} €'),
+                      if (p.description.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4.0),
+                          child: Text(
+                            p.description,
+                            style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey),
+                          ),
+                        ),
+                      if (p.tags.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4.0),
+                          child: Wrap(
+                            spacing: 4,
+                            children: p.tags.map((tag) => Chip(
+                              label: Text(tag, style: const TextStyle(fontSize: 10)),
+                              padding: EdgeInsets.zero,
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              visualDensity: VisualDensity.compact,
+                            )).toList(),
+                          ),
+                        ),
+                    ],
+                  ),
+                  trailing: widget.isAdmin ? IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red), 
+                    onPressed: () => _confirmDelete(context, () {
+                      if (!widget.isTestDataMode) {
+                        FirebaseService.deletePenalty(p.id);
+                      } else {
+                        TestData.penalties.removeWhere((item) => item.id == p.id);
+                        setState(() {});
+                      }
+                    })
+                  ) : null,
+                ),
+              );
+            },
+          ),
+          floatingActionButton: widget.isAdmin
+              ? FloatingActionButton(
+                  onPressed: () => _showPenaltyDialog(context),
+                  backgroundColor: const Color(0xFF4CAF50),
+                  child: const Icon(Icons.add, color: Colors.white),
+                )
+              : null,
+        );
+      },
     );
   }
 }
