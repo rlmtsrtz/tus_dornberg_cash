@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:math';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'models/person.dart';
 import 'models/penalty.dart';
 import 'models/app_transaction.dart';
@@ -483,23 +482,26 @@ class _KassePageState extends State<KassePage> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
-                controller: controller,
-                decoration: const InputDecoration(labelText: 'Intervall (Zahl)'),
-                keyboardType: TextInputType.number,
-              ),
+              const Text('Wechselintervall festlegen:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+              const SizedBox(height: 8),
               DropdownButton<String>(
                 value: unit,
                 isExpanded: true,
                 onChanged: (val) => setDialogState(() => unit = val!),
                 items: const [
-                  DropdownMenuItem(value: 'hours', child: Text('Stunden')),
-                  DropdownMenuItem(value: 'days', child: Text('Tage')),
-                  DropdownMenuItem(value: 'weeks', child: Text('Wochen')),
-                  DropdownMenuItem(value: 'months', child: Text('Monate')),
-                  DropdownMenuItem(value: 'years', child: Text('Jahre')),
+                  DropdownMenuItem(value: 'hours', child: Text('Alle X Stunden')),
+                  DropdownMenuItem(value: 'days', child: Text('Täglich (00:00 Uhr)')),
+                  DropdownMenuItem(value: 'weeks', child: Text('Wöchentlich (Montag)')),
+                  DropdownMenuItem(value: 'months', child: Text('Monatlich (1. des Monats)')),
+                  DropdownMenuItem(value: 'years', child: Text('Jährlich (1. Januar)')),
                 ],
               ),
+              if (unit == 'hours')
+                TextField(
+                  controller: controller,
+                  decoration: const InputDecoration(labelText: 'Anzahl Stunden'),
+                  keyboardType: TextInputType.number,
+                ),
             ],
           ),
           actions: [
@@ -632,28 +634,48 @@ class _KassePageState extends State<KassePage> {
 
   int _calculateActiveGroupIndex(int count, Map<String, dynamic> settings) {
     if (count <= 1) return 0;
-    final startStr = settings['rotationStart'];
-    if (startStr == null) return 0;
     
-    final start = DateTime.parse(startStr as String);
-    final now = DateTime.now();
+    final unit = settings['rotationUnit'] ?? 'days';
     final interval = settings['rotationInterval'] as int? ?? 1;
-    final unit = settings['rotationUnit'] as String? ?? 'days';
+    final now = DateTime.now();
     
-    final diff = now.difference(start);
-    int totalUnits = 0;
+    int rotationPoint = 0;
     
     switch (unit) {
-      case 'seconds': totalUnits = diff.inSeconds; break;
-      case 'hours': totalUnits = diff.inHours; break;
-      case 'days': totalUnits = diff.inDays; break;
-      case 'weeks': totalUnits = (diff.inDays / 7).floor(); break;
-      case 'months': totalUnits = (diff.inDays / 30).floor(); break;
-      case 'years': totalUnits = (diff.inDays / 365).floor(); break;
-      default: totalUnits = diff.inDays;
+      case 'seconds': // For testing
+        final startStr = settings['rotationStart'];
+        if (startStr != null) {
+          final start = DateTime.parse(startStr as String);
+          rotationPoint = (now.difference(start).inSeconds / interval).floor();
+        }
+        break;
+      case 'hours':
+        final startStr = settings['rotationStart'];
+        if (startStr != null) {
+          final start = DateTime.parse(startStr as String);
+          rotationPoint = (now.difference(start).inHours / interval).floor();
+        }
+        break;
+      case 'days':
+        // Days since epoch (starts at 00:00)
+        rotationPoint = (now.millisecondsSinceEpoch / (1000 * 60 * 60 * 24)).floor();
+        break;
+      case 'weeks':
+        // Weeks since epoch (Monday alignment)
+        // Adjust epoch (Thursday) to Monday: subtract 3 days
+        final mondayEpoch = now.subtract(const Duration(days: 3));
+        rotationPoint = (mondayEpoch.millisecondsSinceEpoch / (1000 * 60 * 60 * 24 * 7)).floor();
+        break;
+      case 'months':
+        // Absolute months since year 0
+        rotationPoint = (now.year * 12) + now.month;
+        break;
+      case 'years':
+        rotationPoint = now.year;
+        break;
     }
     
-    return (totalUnits / interval).floor() % count;
+    return rotationPoint % count;
   }
 
   void _showFilterDialog(List<Penalty> penalties) {
@@ -1428,17 +1450,8 @@ class _PersonenListPageState extends State<PersonenListPage> {
                               },
                             ),
                             IconButton(
-                              icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
-                              onPressed: () => _confirmDelete(context, () {
-                                if (!widget.isTestDataMode) {
-                                  FirebaseService.deleteGroup(group);
-                                } else {
-                                  TestData.groups.remove(group);
-                                  TestData.groupSettings.removeWhere((s) => s['name'] == group);
-                                  setState(() {});
-                                  setDialogState(() {});
-                                }
-                              }),
+                              icon: const Icon(Icons.remove_circle_outline, color: Colors.red, size: 18),
+                              onPressed: () => FirebaseService.deleteGroup(group),
                             ),
                           ],
                         ),
